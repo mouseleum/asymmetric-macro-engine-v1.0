@@ -45,6 +45,7 @@ type ResearchRun = {
   rejectedByThreshold: number;
   topRejected?: ResearchResult;
   topRejectedReason?: string;
+  targetFallback?: boolean;
   startedAt?: string;
   completedAt?: string;
   error?: string;
@@ -132,7 +133,7 @@ function buildupSearchText(buildup: Buildup) {
 function scoreBuildupForResearch(buildup: Buildup, keywords: string[]): ResearchResult | null {
   const searchText = buildupSearchText(buildup);
   const matchedKeywords = keywords.filter((keyword) => searchText.includes(keyword));
-  if (keywords.length > 0 && matchedKeywords.length !== keywords.length) return null;
+  if (keywords.length > 0 && matchedKeywords.length === 0) return null;
 
   const severityBoost = { low: 0, medium: 2, high: 5, extreme: 8 }[buildup.severity];
   const keywordBoost = Math.min(12, matchedKeywords.length * 4);
@@ -328,15 +329,19 @@ function CommandBar({
     setIsRunning(true);
     window.setTimeout(() => {
       const qualityRejected = buildups.filter((buildup) => !passesDerivedQualityGate(buildup));
-      const keywordMatched = buildups
+      const directKeywordMatched = buildups
         .map((buildup) => scoreBuildupForResearch(buildup, keywords))
         .filter((result): result is ResearchResult => Boolean(result));
+      const targetFallback = threshold === 0 && keywords.length > 0 && directKeywordMatched.length === 0;
+      const keywordMatched = targetFallback
+        ? buildups.map(scoreBuildupWithoutKeywordFilter)
+        : directKeywordMatched;
       const results = keywordMatched
         .filter((result) => result.score >= threshold)
         .sort((a, b) => b.score - a.score)
         .slice(0, 8);
       const thresholdRejected = keywordMatched.filter((result) => result.score < threshold);
-      const keywordRejected = buildups.length - keywordMatched.length;
+      const keywordRejected = targetFallback ? 0 : buildups.length - keywordMatched.length;
       const topQualityRejected = qualityRejected
         .map(scoreBuildupWithoutKeywordFilter)
         .sort((a, b) => b.score - a.score)[0];
@@ -365,6 +370,7 @@ function CommandBar({
         rejectedByThreshold: thresholdRejected.length,
         topRejected,
         topRejectedReason,
+        targetFallback,
         startedAt,
         completedAt: new Date().toISOString(),
       });
@@ -807,7 +813,7 @@ function ScanningReport({ run }: { run: ResearchRun }) {
       </div>
       <div className="mt-10 border-y border-line/10 py-8">
         <p className="max-w-2xl text-xl leading-relaxed text-ink/70">
-          Scanning Vault signals for a reportable buildup. The pass only surfaces a setup if quality, keyword, and alert-threshold gates all clear.
+          Scanning Vault signals for a reportable buildup. Search words narrow the pass when they match; threshold zero can fall back to broad candidates.
         </p>
       </div>
       <dl className="mt-8 grid gap-5 font-mono text-xs uppercase text-muted md:grid-cols-3">

@@ -27,6 +27,18 @@ type ResearchResult = {
   score: number;
   matchedKeywords: string[];
   rationale: string;
+  quality: CandidateQuality;
+  rejectionReasons: string[];
+};
+
+type CandidateQuality = {
+  hasCatalyst: boolean;
+  hasNonGenericBasket: boolean;
+  hasUsefulInvalidation: boolean;
+  hasCoordinates: boolean;
+  hasTelemetry: boolean;
+  isStructured: boolean;
+  score: number;
 };
 
 type ResearchPhase = "idle" | "scanning" | "no-alert" | "alert-found" | "error";
@@ -45,6 +57,7 @@ type ResearchRun = {
   rejectedByThreshold: number;
   topRejected?: ResearchResult;
   topRejectedReason?: string;
+  rejectedCandidates?: ResearchResult[];
   targetFallback?: boolean;
   startedAt?: string;
   completedAt?: string;
@@ -130,38 +143,104 @@ function buildupSearchText(buildup: Buildup) {
     .toLowerCase();
 }
 
+function includesGeneric(value: string) {
+  return [
+    "macro-sensitive beneficiary basket",
+    "complacent risk beta",
+    "position-size and event-risk hedge",
+    "quality defensives",
+    "cyclical growth beta",
+  ].some((phrase) => value.toLowerCase().includes(phrase));
+}
+
+function isDefaultInvalidation(value: string) {
+  return /release lands in line with consensus|no downside scenario supplied|binary catalyst window passes/i.test(value);
+}
+
+function candidateQuality(buildup: Buildup): CandidateQuality {
+  const hasCatalyst = buildup.catalysts.some((catalyst) => !/^scheduled date:/i.test(catalyst) && catalyst.trim().length > 8);
+  const basketText = [
+    buildup.assetBasket.primaryLong,
+    buildup.assetBasket.primaryShort,
+    buildup.assetBasket.hedge,
+    ...buildup.assetBasket.proxies,
+  ].join(" ");
+  const hasNonGenericBasket = basketText.trim().length > 0 && !includesGeneric(basketText);
+  const hasUsefulInvalidation = buildup.invalidation.trim().length > 20 && !isDefaultInvalidation(buildup.invalidation);
+  const hasCoordinates = Boolean(buildup.coordinates);
+  const hasTelemetry = buildup.rawTelemetry.length > 0;
+  const isStructured = buildup.origin === "explicit" || buildup.origin === "parsed" || buildup.origin === "example";
+  const score =
+    (hasCatalyst ? 18 : 0) +
+    (hasNonGenericBasket ? 18 : 0) +
+    (hasUsefulInvalidation ? 18 : 0) +
+    (hasCoordinates ? 14 : 0) +
+    (hasTelemetry ? 12 : 0) +
+    (isStructured ? 20 : 0);
+
+  return {
+    hasCatalyst,
+    hasNonGenericBasket,
+    hasUsefulInvalidation,
+    hasCoordinates,
+    hasTelemetry,
+    isStructured,
+    score,
+  };
+}
+
+function candidateRejectionReasons(buildup: Buildup, quality: CandidateQuality) {
+  return [
+    buildup.origin === "derived" && !quality.isStructured ? "derived watch item, not a Vault opportunity" : "",
+    !quality.hasCatalyst ? "no specific catalyst" : "",
+    !quality.hasNonGenericBasket ? "generic asset basket" : "",
+    !quality.hasUsefulInvalidation ? "weak invalidation" : "",
+    !quality.hasCoordinates ? "no coordinates" : "",
+    buildup.divergenceScore < 70 ? "weak divergence" : "",
+    buildup.conviction < 70 ? "weak conviction" : "",
+  ].filter(Boolean);
+}
+
 function scoreBuildupForResearch(buildup: Buildup, keywords: string[]): ResearchResult | null {
   const searchText = buildupSearchText(buildup);
   const matchedKeywords = keywords.filter((keyword) => searchText.includes(keyword));
   if (keywords.length > 0 && matchedKeywords.length === 0) return null;
 
+  const quality = candidateQuality(buildup);
+  const rejectionReasons = candidateRejectionReasons(buildup, quality);
   const severityBoost = { low: 0, medium: 2, high: 5, extreme: 8 }[buildup.severity];
   const keywordBoost = Math.min(12, matchedKeywords.length * 4);
+  const qualityAdjustment = quality.isStructured ? 8 : Math.round((quality.score - 50) / 5);
   const baseScore = buildup.conviction * 0.52 + buildup.divergenceScore * 0.48;
-  const score = clampScore(baseScore + severityBoost + keywordBoost);
+  const score = clampScore(baseScore + severityBoost + keywordBoost + qualityAdjustment);
   const leadingSignal = buildup.divergenceScore >= buildup.conviction ? "divergence" : "conviction";
 
   return {
     buildup,
     score,
     matchedKeywords,
-    rationale: `${leadingSignal} leads // ${buildup.severity} severity // ${buildup.catalysts.length} catalyst${buildup.catalysts.length === 1 ? "" : "s"}`,
+    quality,
+    rejectionReasons,
+    rationale: `${leadingSignal} leads // quality ${quality.score}/100 // ${buildup.severity} severity // ${buildup.catalysts.length} catalyst${buildup.catalysts.length === 1 ? "" : "s"}`,
   };
 }
 
 function scoreBuildupWithoutKeywordFilter(buildup: Buildup): ResearchResult {
+  const quality = candidateQuality(buildup);
   return scoreBuildupForResearch(buildup, []) ?? {
     buildup,
     score: 0,
     matchedKeywords: [],
+    quality,
+    rejectionReasons: candidateRejectionReasons(buildup, quality),
     rationale: "No score available",
   };
 }
 
 function passesDerivedQualityGate(buildup: Buildup) {
   if (buildup.origin !== "derived") return true;
-  if (buildup.severity !== "extreme") return false;
-  return buildup.conviction >= 85 && buildup.divergenceScore >= 85 && buildup.scoreBreakdown.total >= 85;
+  const quality = candidateQuality(buildup);
+  return buildup.conviction >= 85 && buildup.divergenceScore >= 85 && quality.hasNonGenericBasket && quality.hasUsefulInvalidation;
 }
 
 function opportunityStatusText(model: DashboardModel, reportableCount: number) {
@@ -183,6 +262,11 @@ function parserCoverageText(model: DashboardModel) {
   const telemetryCount = model.buildups.filter((buildup) => buildup.rawTelemetry.length > 0).length;
 
   return `${parsedCount} parsed raw // ${explicitCount} explicit // ${derivedCount} derived // ${coordinateCount} mapped // ${telemetryCount} telemetry-backed`;
+}
+
+function rejectionSummary(result: ResearchResult) {
+  if (result.rejectionReasons.length === 0) return `Score ${result.score} did not clear the current pass.`;
+  return result.rejectionReasons.slice(0, 4).join(", ");
 }
 
 function originLabel(buildup: Buildup) {
@@ -337,36 +421,48 @@ function CommandBar({
       rejectedByQuality: 0,
       rejectedByKeyword: 0,
       rejectedByThreshold: 0,
+      rejectedCandidates: [],
       startedAt,
     });
     setIsRunning(true);
     window.setTimeout(() => {
-      const qualityRejected = buildups.filter((buildup) => !passesDerivedQualityGate(buildup));
+      const allScored = buildups.map(scoreBuildupWithoutKeywordFilter);
       const directKeywordMatched = buildups
         .map((buildup) => scoreBuildupForResearch(buildup, keywords))
         .filter((result): result is ResearchResult => Boolean(result));
       const targetFallback = threshold === 0 && keywords.length > 0 && directKeywordMatched.length === 0;
       const keywordMatched = targetFallback
-        ? buildups.map(scoreBuildupWithoutKeywordFilter)
+        ? allScored
         : directKeywordMatched;
-      const results = keywordMatched
+      const qualityRejected = keywordMatched.filter((result) => !passesDerivedQualityGate(result.buildup));
+      const qualityAccepted = keywordMatched.filter((result) => passesDerivedQualityGate(result.buildup));
+      const results = qualityAccepted
         .filter((result) => result.score >= threshold)
         .sort((a, b) => b.score - a.score)
         .slice(0, 8);
-      const thresholdRejected = keywordMatched.filter((result) => result.score < threshold);
+      const thresholdRejected = qualityAccepted.filter((result) => result.score < threshold);
       const keywordRejected = targetFallback ? 0 : buildups.length - keywordMatched.length;
-      const topQualityRejected = qualityRejected
-        .map(scoreBuildupWithoutKeywordFilter)
-        .sort((a, b) => b.score - a.score)[0];
+      const topQualityRejected = [...qualityRejected].sort((a, b) => b.score - a.score)[0];
       const topThresholdRejected = thresholdRejected.sort((a, b) => b.score - a.score)[0];
-      const topRejected = topThresholdRejected ?? topQualityRejected;
+      const keywordRejectedCandidates = keywords.length > 0 && !targetFallback
+        ? allScored.filter((result) => !directKeywordMatched.some((matched) => matched.buildup.id === result.buildup.id))
+        : [];
+      const topRejected = topThresholdRejected ?? topQualityRejected ?? keywordRejectedCandidates.sort((a, b) => b.score - a.score)[0];
       const topRejectedReason = topThresholdRejected
         ? `Score ${topThresholdRejected.score} did not clear threshold ${threshold}.`
         : topQualityRejected
-          ? "Below the strict passive-dashboard quality gate."
+          ? `Below the quality gate: ${topQualityRejected.rejectionReasons.slice(0, 3).join(", ")}.`
           : keywordRejected > 0
             ? "Rejected by keyword mismatch."
             : undefined;
+      const rejectedCandidates = [
+        ...thresholdRejected,
+        ...qualityRejected,
+        ...keywordRejectedCandidates,
+      ]
+        .filter((candidate, index, candidates) => candidates.findIndex((item) => item.buildup.id === candidate.buildup.id) === index)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
 
       setIsRunning(false);
       onComplete({
@@ -383,6 +479,7 @@ function CommandBar({
         rejectedByThreshold: thresholdRejected.length,
         topRejected,
         topRejectedReason,
+        rejectedCandidates,
         targetFallback,
         startedAt,
         completedAt: new Date().toISOString(),
@@ -818,6 +915,38 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
             ))}
           </div>
         </details>
+
+        <details className="mt-8 border-t border-line/10 pt-8">
+          <summary className="cursor-pointer font-mono text-[11px] font-bold uppercase tracking-normal text-muted hover:text-accent">
+            Vault Signal Inspector
+          </summary>
+          <dl className="mt-4 grid gap-3 border border-line/10 bg-bg/60 p-4 font-mono text-[11px] uppercase text-muted md:grid-cols-2">
+            <div className="flex justify-between gap-4">
+              <dt>Origin</dt>
+              <dd className="text-right text-ink">{originLabel(buildup)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Quality</dt>
+              <dd className="text-right text-ink">{candidateQuality(buildup).score}/100</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Coordinates</dt>
+              <dd className="text-right text-ink">{buildup.coordinates ? "present" : "missing"}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Telemetry lines</dt>
+              <dd className="text-right text-ink">{buildup.rawTelemetry.length}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Sources</dt>
+              <dd className="text-right text-ink">{buildup.sources.length}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt>Research gate</dt>
+              <dd className="text-right text-ink">{passesDerivedQualityGate(buildup) ? "eligible" : "watch-grade"}</dd>
+            </div>
+          </dl>
+        </details>
       </section>
     </article>
   );
@@ -957,6 +1086,24 @@ function NoAlertReport({
           </p>
         </div>
       ) : null}
+      {run.rejectedCandidates && run.rejectedCandidates.length > 0 ? (
+        <div className="mt-8 border border-line/10 bg-bg/45 p-4">
+          <p className="font-mono text-[11px] font-bold uppercase text-muted">Rejected Candidates</p>
+          <div className="mt-4 space-y-4">
+            {run.rejectedCandidates.map((candidate) => (
+              <div key={candidate.buildup.id} className="border-t border-line/10 pt-4 first:border-t-0 first:pt-0">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="font-bold uppercase">{candidate.buildup.label}</h3>
+                  <span className="font-mono text-[11px] uppercase text-muted">
+                    Score {candidate.score} // Quality {candidate.quality.score}/100
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-ink/70">{rejectionSummary(candidate)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -1054,6 +1201,7 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
     rejectedByQuality: 0,
     rejectedByKeyword: 0,
     rejectedByThreshold: 0,
+    rejectedCandidates: [],
   });
   const [exampleLoaded, setExampleLoaded] = useState(false);
   const [parserDemoLoaded, setParserDemoLoaded] = useState(false);
@@ -1104,6 +1252,7 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
               rejectedByQuality: 0,
               rejectedByKeyword: 0,
               rejectedByThreshold: 0,
+              rejectedCandidates: [],
             });
           }}
           onLoadParserDemo={
@@ -1123,6 +1272,7 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
                     rejectedByQuality: 0,
                     rejectedByKeyword: 0,
                     rejectedByThreshold: 0,
+                    rejectedCandidates: [],
                   });
                 }
               : undefined
@@ -1158,6 +1308,10 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
                       rejectedByQuality: displayBuildups.filter((buildup) => !passesDerivedQualityGate(buildup)).length,
                       rejectedByKeyword: 0,
                       rejectedByThreshold: 0,
+                      rejectedCandidates: displayBuildups
+                        .map(scoreBuildupWithoutKeywordFilter)
+                        .sort((a, b) => b.score - a.score)
+                        .slice(0, 3),
                     }
               }
               status={feedStatus}

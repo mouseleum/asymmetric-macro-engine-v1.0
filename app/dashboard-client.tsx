@@ -29,9 +29,13 @@ type ResearchResult = {
   rationale: string;
 };
 
+type ResearchPhase = "idle" | "scanning" | "no-alert" | "alert-found" | "error";
+
 type ResearchRun = {
+  phase: ResearchPhase;
   hasRun: boolean;
   query: string;
+  keywords: string[];
   threshold: number;
   results: ResearchResult[];
   scanned: number;
@@ -41,6 +45,9 @@ type ResearchRun = {
   rejectedByThreshold: number;
   topRejected?: ResearchResult;
   topRejectedReason?: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
 };
 
 function formatTime(value: string) {
@@ -205,10 +212,12 @@ function CommandBar({
   model,
   buildups,
   onComplete,
+  onStart,
   onLoadExample,
 }: {
   model: DashboardModel;
   buildups: Buildup[];
+  onStart: (run: ResearchRun) => void;
   onComplete: (run: ResearchRun) => void;
   onLoadExample: () => void;
 }) {
@@ -218,6 +227,21 @@ function CommandBar({
 
   function runResearchPass() {
     const keywords = tokenizeSearch(query);
+    const startedAt = new Date().toISOString();
+    onStart({
+      phase: "scanning",
+      hasRun: true,
+      query,
+      keywords,
+      threshold,
+      results: [],
+      scanned: buildups.length,
+      rejected: 0,
+      rejectedByQuality: 0,
+      rejectedByKeyword: 0,
+      rejectedByThreshold: 0,
+      startedAt,
+    });
     setIsRunning(true);
     window.setTimeout(() => {
       const qualityRejected = buildups.filter((buildup) => !passesDerivedQualityGate(buildup));
@@ -246,8 +270,10 @@ function CommandBar({
 
       setIsRunning(false);
       onComplete({
+        phase: results.length > 0 ? "alert-found" : "no-alert",
         hasRun: true,
         query,
+        keywords,
         threshold,
         results,
         scanned: buildups.length,
@@ -257,6 +283,8 @@ function CommandBar({
         rejectedByThreshold: thresholdRejected.length,
         topRejected,
         topRejectedReason,
+        startedAt,
+        completedAt: new Date().toISOString(),
       });
     }, 450);
   }
@@ -450,6 +478,25 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
         <SignalMap buildup={buildup} />
       </div>
 
+      <nav className="mt-8 flex gap-2 overflow-x-auto border-y border-line/10 py-3 no-scrollbar" aria-label="Report sections">
+        {[
+          ["Buildup", "#buildup"],
+          ["Basket", "#basket"],
+          ["Divergence", "#divergence"],
+          ["Catalysts", "#catalysts"],
+          ["Deep", "#deep-analysis"],
+          ["Telemetry", "#telemetry"],
+        ].map(([label, href]) => (
+          <a
+            key={href}
+            href={href}
+            className="shrink-0 border border-line/10 px-3 py-2 font-mono text-[10px] font-bold uppercase text-muted hover:border-accent hover:text-accent"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+
       <div className="mt-8 flex items-center justify-between gap-4 border-b border-line/10 pb-8 font-mono text-xs uppercase text-muted">
         <span className="inline-flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-good" aria-hidden="true" />
@@ -458,7 +505,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
         <span>{formatTime(model.freshness.generatedAt)}</span>
       </div>
 
-      <section className="mt-10">
+      <section id="buildup" className="mt-10 scroll-mt-6">
         <h3 className="text-2xl font-medium uppercase text-ink/75">Buildup Detected</h3>
         <p className="mt-6 max-w-3xl text-xl leading-relaxed text-ink/75">{buildup.situation}</p>
 
@@ -498,7 +545,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           </div>
         </div>
 
-        <div className="mt-8 border-t border-line/10 pt-8">
+        <div id="basket" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <SectionTitle>Asset Correlation Basket</SectionTitle>
           <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
             <div>
@@ -520,7 +567,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           </dl>
         </div>
 
-        <div className="mt-8 grid gap-8 border-t border-line/10 pt-8 md:grid-cols-2">
+        <div id="divergence" className="mt-8 grid scroll-mt-6 gap-8 border-t border-line/10 pt-8 md:grid-cols-2">
           <div>
             <SectionTitle>Sentiment Divergence</SectionTitle>
             <dl className="mt-3 space-y-3 text-sm leading-relaxed text-ink/70">
@@ -582,7 +629,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           </div>
         </div>
 
-        <div className="mt-8 border-t border-line/10 pt-8">
+        <div id="catalysts" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <SectionTitle>Upcoming Catalysts</SectionTitle>
           <FactList items={buildup.catalysts.length > 0 ? buildup.catalysts : ["No upcoming catalysts supplied by Macro Vault."]} />
         </div>
@@ -592,7 +639,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           <p className="mt-3 text-sm leading-relaxed text-ink/70">{buildup.invalidation}</p>
         </div>
 
-        <details className="mt-8 border-t border-line/10 pt-8">
+        <details id="deep-analysis" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <summary className="cursor-pointer text-xl font-semibold uppercase text-ink/75 hover:text-accent">
             Ultra Deep Analysis (Pro)
           </summary>
@@ -620,7 +667,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           </div>
         </details>
 
-        <details className="mt-8 border-t border-line/10 pt-8">
+        <details id="telemetry" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <summary className="cursor-pointer font-mono text-[11px] font-bold uppercase tracking-normal text-muted hover:text-accent">
             Raw Telemetry Data
           </summary>
@@ -631,6 +678,53 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           </div>
         </details>
       </section>
+    </article>
+  );
+}
+
+function ScanningReport({ run }: { run: ResearchRun }) {
+  return (
+    <article className="mx-auto max-w-5xl border border-accent bg-paper p-8 shadow-[10px_10px_0_#141414] md:p-12">
+      <div className="flex items-start gap-4">
+        <Loader2 className="mt-1 h-7 w-7 shrink-0 animate-spin text-accent" aria-hidden="true" />
+        <div>
+          <h2 className="text-3xl font-extrabold uppercase leading-tight">Research Running</h2>
+          <p className="mt-2 font-mono text-xs uppercase text-muted">Deep pass // threshold gate active</p>
+        </div>
+      </div>
+      <div className="mt-10 border-y border-line/10 py-8">
+        <p className="max-w-2xl text-xl leading-relaxed text-ink/70">
+          Scanning Vault signals for a reportable buildup. The pass only surfaces a setup if quality, keyword, and alert-threshold gates all clear.
+        </p>
+      </div>
+      <dl className="mt-8 grid gap-5 font-mono text-xs uppercase text-muted md:grid-cols-3">
+        <div>
+          <dt>Search Words</dt>
+          <dd className="mt-2 text-ink">{run.query || "All Vault Signals"}</dd>
+        </div>
+        <div>
+          <dt>Threshold</dt>
+          <dd className="mt-2 text-ink">{run.threshold}</dd>
+        </div>
+        <div>
+          <dt>Candidate Set</dt>
+          <dd className="mt-2 text-ink">{run.scanned}</dd>
+        </div>
+      </dl>
+      <div className="mt-8 grid gap-3 font-mono text-[11px] uppercase text-muted">
+        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
+          <span>1. Vault candidate retrieval</span>
+          <span className="text-good">Complete</span>
+        </div>
+        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
+          <span>2. Derived-quality gate</span>
+          <span className="text-accent">Running</span>
+        </div>
+        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
+          <span>3. Keyword and threshold pass</span>
+          <span>Queued</span>
+        </div>
+      </div>
     </article>
   );
 }
@@ -656,6 +750,26 @@ function NoAlertReport({
           No setup cleared the alert threshold. That is a valid result: the engine found no high-conviction asymmetry for this pass.
         </p>
         <p className="mt-4 max-w-2xl font-mono text-xs uppercase leading-relaxed text-muted">{status}</p>
+      </div>
+      <div className="mt-8 grid gap-3 font-mono text-[11px] uppercase text-muted">
+        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
+          <span>Quality gate</span>
+          <span className={run.rejectedByQuality > 0 ? "text-accent" : "text-good"}>
+            {run.rejectedByQuality > 0 ? `${run.rejectedByQuality} rejected` : "Clear"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
+          <span>Keyword pass</span>
+          <span className={run.rejectedByKeyword > 0 ? "text-accent" : "text-good"}>
+            {run.keywords.length > 0 ? `${run.keywords.join(", ")}` : "All signals"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
+          <span>Alert threshold</span>
+          <span className={run.rejectedByThreshold > 0 ? "text-accent" : "text-good"}>
+            {run.rejectedByThreshold > 0 ? `${run.rejectedByThreshold} below ${run.threshold}` : `Gate ${run.threshold}`}
+          </span>
+        </div>
       </div>
       <dl className="mt-8 grid gap-5 font-mono text-xs uppercase text-muted md:grid-cols-3">
         <div>
@@ -696,6 +810,7 @@ function NoAlertReport({
           <p className="font-mono text-[11px] font-bold uppercase text-muted">Top Rejected Candidate</p>
           <h3 className="mt-3 font-bold uppercase">{run.topRejected.buildup.label}</h3>
           <p className="mt-2 text-sm leading-relaxed text-ink/70">{run.topRejectedReason}</p>
+          <p className="mt-2 text-sm leading-relaxed text-ink/70">{run.topRejected.rationale}</p>
           <p className="mt-3 font-mono text-[11px] uppercase text-muted">
             Score {run.topRejected.score} // Conviction {run.topRejected.buildup.conviction} // Divergence {run.topRejected.buildup.divergenceScore}
           </p>
@@ -725,12 +840,21 @@ function ScanHistory({
           <History className="h-5 w-5" aria-hidden="true" />
           Scan History
         </h2>
-        <span className="font-mono text-[10px] uppercase text-muted">{run.hasRun ? "Latest" : "Vault"}</span>
+        <span className="font-mono text-[10px] uppercase text-muted">{run.phase === "scanning" ? "Scanning" : run.hasRun ? "Latest" : "Vault"}</span>
       </div>
 
-      {run.hasRun && run.results.length === 0 ? (
+      {run.phase === "scanning" ? (
         <div className="border-b border-line/10 bg-ink px-6 py-7 text-bg">
-          <p className="font-mono text-[11px] uppercase text-bg/55">{formatShortTime(new Date().toISOString())}</p>
+          <p className="font-mono text-[11px] uppercase text-bg/55">{formatShortTime(run.startedAt ?? new Date().toISOString())}</p>
+          <h3 className="mt-4 flex items-center gap-2 font-bold uppercase">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Research running
+          </h3>
+          <p className="mt-2 font-mono text-[11px] uppercase text-bg/45">Threshold {run.threshold}</p>
+        </div>
+      ) : run.phase === "no-alert" ? (
+        <div className="border-b border-line/10 bg-ink px-6 py-7 text-bg">
+          <p className="font-mono text-[11px] uppercase text-bg/55">{formatShortTime(run.completedAt ?? new Date().toISOString())}</p>
           <h3 className="mt-4 font-bold uppercase">No alert found</h3>
           <p className="mt-2 font-mono text-[11px] uppercase text-bg/45">Threshold {run.threshold}</p>
         </div>
@@ -778,8 +902,10 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
   );
   const [selectedId, setSelectedId] = useState<string | undefined>(sortedBuildups[0]?.id);
   const [researchRun, setResearchRun] = useState<ResearchRun>({
+    phase: "idle",
     hasRun: false,
     query: "",
+    keywords: [],
     threshold: 60,
     results: [],
     scanned: 0,
@@ -793,8 +919,13 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
   const displayBuildups = exampleLoaded ? [sampleNorthernFrontBuildup, ...sortedBuildups] : sortedBuildups;
   const reportableBuildups = displayBuildups.filter(passesDerivedQualityGate);
   const activeBuildup = reportableBuildups.find((item) => item.id === selectedId) ?? reportableBuildups[0];
-  const showNoAlert = reportableBuildups.length === 0 || (researchRun.hasRun && researchRun.results.length === 0);
+  const showScanning = researchRun.phase === "scanning";
+  const showNoAlert = !showScanning && (reportableBuildups.length === 0 || researchRun.phase === "no-alert");
   const feedStatus = opportunityStatusText(model, reportableBuildups.length);
+
+  function startResearch(run: ResearchRun) {
+    setResearchRun(run);
+  }
 
   function completeResearch(run: ResearchRun) {
     setResearchRun(run);
@@ -808,13 +939,16 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
         <CommandBar
           model={model}
           buildups={displayBuildups}
+          onStart={startResearch}
           onComplete={completeResearch}
           onLoadExample={() => {
             setExampleLoaded(true);
             setSelectedId(sampleNorthernFrontBuildup.id);
             setResearchRun({
+              phase: "idle",
               hasRun: false,
               query: "",
+              keywords: [],
               threshold: 60,
               results: [],
               scanned: 0,
@@ -833,14 +967,18 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
 
       <div className="grid lg:grid-cols-[1fr_360px]">
         <section className="px-5 py-10 md:px-10 md:py-12">
-          {showNoAlert ? (
+          {showScanning ? (
+            <ScanningReport run={researchRun} />
+          ) : showNoAlert ? (
             <NoAlertReport
               run={
                 researchRun.hasRun
                   ? researchRun
                   : {
+                      phase: "idle",
                       hasRun: false,
                       query: "",
+                      keywords: [],
                       threshold: 60,
                       results: [],
                       scanned: displayBuildups.length,

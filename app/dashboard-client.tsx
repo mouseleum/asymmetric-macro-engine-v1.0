@@ -196,6 +196,67 @@ function mapExternalUrl(buildup: Buildup) {
   return `https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lon.toFixed(5)}#map=7/${lat.toFixed(5)}/${lon.toFixed(5)}`;
 }
 
+function mapRegion(buildup: Buildup) {
+  const lat = buildup.coordinates?.lat;
+  const lon = buildup.coordinates?.lon;
+  if (lat && lon && lat >= 24 && lat <= 28.5 && lon >= 52 && lon <= 59) return "hormuz";
+  if (lat && lon && lat >= 31 && lat <= 35.5 && lon >= 33 && lon <= 37) return "levant";
+  return "generic";
+}
+
+function LocalMapLayer({ buildup }: { buildup: Buildup }) {
+  const region = mapRegion(buildup);
+  const labels =
+    region === "hormuz"
+      ? [
+          ["KUWAIT", "left-[18%] top-[22%]"],
+          ["QATAR", "left-[31%] top-[60%]"],
+          ["DUBAI", "left-[43%] top-[61%]"],
+          ["MUSCAT", "left-[53%] top-[77%]"],
+          ["IRAN", "left-[45%] top-[16%]"],
+          ["PAKISTAN", "right-[5%] top-[22%]"],
+          ["SAUDI ARABIA", "left-[4%] top-[55%]"],
+        ]
+      : region === "levant"
+        ? [
+            ["CYPRUS", "left-[38%] top-[28%]"],
+            ["LEBANON", "left-[47%] top-[42%]"],
+            ["SYRIA", "left-[54%] top-[30%]"],
+            ["ISRAEL", "left-[45%] top-[63%]"],
+            ["JORDAN", "left-[53%] top-[67%]"],
+            ["MEDITERRANEAN SEA", "left-[7%] top-[43%]"],
+            ["IRAQ", "right-[15%] top-[55%]"],
+          ]
+        : [
+            ["MACRO", "left-[9%] top-[55%]"],
+            [buildupTheme(buildup).toUpperCase(), "right-[12%] top-[20%]"],
+            ["VAULT SIGNAL", "right-[14%] bottom-[20%]"],
+          ];
+
+  return (
+    <div className="absolute inset-0 bg-[#f8f8f5]">
+      <div className="absolute inset-0 bg-[linear-gradient(24deg,rgba(242,125,38,0.08)_1px,transparent_1px),linear-gradient(102deg,rgba(20,20,20,0.06)_1px,transparent_1px)] bg-[length:145px_98px,180px_130px]" />
+      <div className="absolute left-[4%] top-[16%] h-[58%] w-[88%] rotate-[-4deg] rounded-[48%] border border-accent/10 bg-white/70" />
+      <div className="absolute left-[24%] top-[27%] h-[45%] w-[52%] rotate-[10deg] rounded-[55%] bg-[#cfd7d8]" />
+      <div className="absolute left-[34%] top-[10%] h-[48%] w-[25%] rotate-[15deg] rounded-[48%] bg-[#f8f8f5]" />
+      <div className="absolute left-[50%] top-[25%] h-[54%] w-[38%] rotate-[6deg] rounded-[50%] bg-[#cfd7d8]" />
+      <div className="absolute left-[8%] top-[12%] h-px w-[84%] rotate-[13deg] bg-accent/10" />
+      <div className="absolute left-[10%] top-[74%] h-px w-[78%] rotate-[-8deg] bg-accent/10" />
+      {labels.map(([label, position]) => (
+        <span
+          key={label}
+          className={cn(
+            "absolute font-mono text-[11px] font-bold uppercase tracking-normal text-[#9aa8b2] drop-shadow-[0_1px_0_rgba(255,255,255,0.9)] md:text-lg",
+            position,
+          )}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function StatusBanner({ model }: { model: DashboardModel }) {
   if (model.errors.length === 0 && model.freshness.mode === "live") return null;
 
@@ -396,6 +457,7 @@ function SignalMap({ buildup }: { buildup: Buildup }) {
   return (
     <div className="border border-line/10 bg-[#eef0ed] p-1">
       <div className="relative h-[260px] overflow-hidden border-b border-line/10 md:h-[360px]">
+        <LocalMapLayer buildup={buildup} />
         {embedUrl ? (
           <>
             <iframe
@@ -403,40 +465,30 @@ function SignalMap({ buildup }: { buildup: Buildup }) {
               src={embedUrl}
               loading="lazy"
               referrerPolicy="no-referrer"
-              className="h-full w-full opacity-[0.82] grayscale-[0.18] sepia-[0.08]"
+              className="relative z-10 h-full w-full opacity-[0.42] mix-blend-multiply grayscale-[0.18] sepia-[0.08]"
             />
-            <div className="pointer-events-none absolute inset-0 bg-white/10" />
-            <div className="pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2">
+            <div className="pointer-events-none absolute inset-0 z-20 bg-white/10" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-7 w-7 -translate-x-1/2 -translate-y-1/2">
               <span className="signal-pulse absolute inset-0 rounded-full bg-accent/45" />
               <span className="absolute left-1/2 top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-accent shadow-[0_0_0_1px_#f27d26,0_6px_20px_rgba(242,125,38,0.35)]" />
             </div>
           </>
         ) : (
           <>
-            <div className="absolute inset-0 opacity-70">
-              <div className="absolute left-[7%] top-[22%] h-28 w-[86%] rounded-[55%] border border-accent/10 bg-white/35" />
-              <div className="absolute left-[12%] top-[48%] h-px w-[78%] rotate-[-8deg] bg-accent/10" />
-              <div className="absolute left-[18%] top-[30%] h-px w-[72%] rotate-[12deg] bg-accent/10" />
-              <div className="absolute left-[28%] top-[13%] h-[82%] w-px rotate-[18deg] bg-line/10" />
-              <div className="absolute left-[59%] top-[4%] h-[92%] w-px rotate-[-14deg] bg-line/10" />
-              <div className="absolute bottom-8 left-14 font-mono text-lg font-bold uppercase text-muted/30">Macro</div>
-              <div className="absolute right-16 top-16 font-mono text-sm font-bold uppercase text-muted/30">{buildupTheme(buildup)}</div>
-              <div className="absolute bottom-16 right-20 font-mono text-xs font-bold uppercase text-muted/30">Vault Signal</div>
-            </div>
-            <div className="absolute left-5 top-5 overflow-hidden border border-line/30 bg-white shadow-sm">
-              <button type="button" className="grid h-10 w-10 place-items-center border-b border-line/20 text-2xl font-bold" aria-label="Zoom in">
-                +
-              </button>
-              <button type="button" className="grid h-10 w-10 place-items-center text-2xl font-bold" aria-label="Zoom out">
-                -
-              </button>
-            </div>
-            <div className="absolute left-[50%] top-[49%] h-8 w-8 -translate-x-1/2 -translate-y-1/2">
+            <div className="absolute left-[50%] top-[49%] z-30 h-8 w-8 -translate-x-1/2 -translate-y-1/2">
               <span className="signal-pulse absolute inset-0 rounded-full bg-accent/45" />
               <span className="absolute left-1/2 top-1/2 block h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-accent shadow-[0_0_0_1px_#f27d26]" />
             </div>
           </>
         )}
+        <div className="absolute left-5 top-5 z-40 overflow-hidden border border-line/30 bg-white shadow-sm">
+          <button type="button" className="grid h-10 w-10 place-items-center border-b border-line/20 text-2xl font-bold" aria-label="Zoom in">
+            +
+          </button>
+          <button type="button" className="grid h-10 w-10 place-items-center text-2xl font-bold" aria-label="Zoom out">
+            -
+          </button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f2f2f0] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">
         <span className="inline-flex items-center gap-2">

@@ -17,7 +17,7 @@ import {
   Search,
   Target,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { sampleNorthernFrontBuildup } from "@/lib/macro-vault/sample-buildup";
 import type { Buildup, DashboardModel, RiskItem } from "@/lib/macro-vault/types";
@@ -282,6 +282,7 @@ function CommandBar({
   const [query, setQuery] = useState("");
   const [threshold, setThreshold] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
+  const queryInputRef = useRef<HTMLInputElement>(null);
 
   function runResearchPass() {
     const keywords = tokenizeSearch(query);
@@ -352,10 +353,12 @@ function CommandBar({
         <label className="sr-only" htmlFor="target-opportunity">
           Target opportunity
         </label>
-        <div className="relative min-w-0 flex-1 xl:max-w-[420px]">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+        <div className="relative min-w-0 flex-1 xl:max-w-[420px]" onClick={() => queryInputRef.current?.focus()}>
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
           <input
+            ref={queryInputRef}
             id="target-opportunity"
+            autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Target Opportunity"

@@ -173,6 +173,15 @@ function opportunityStatusText(model: DashboardModel, reportableCount: number) {
   return `No explicit opportunities returned. ${model.diagnostics.opportunities.derivedCount} derived Vault watch items held below the alert gate.`;
 }
 
+function originLabel(buildup: Buildup) {
+  return {
+    explicit: "Vault explicit",
+    parsed: "Parsed report",
+    derived: "Derived watch item",
+    example: "Example report",
+  }[buildup.origin];
+}
+
 function mapExternalUrl(buildup: Buildup) {
   if (!buildup.coordinates) return "";
   const { lat, lon } = buildup.coordinates;
@@ -541,7 +550,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] uppercase text-muted">
             <span className="inline-flex h-9 items-center gap-2 border border-line/10 px-3">
               <Database className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-              Vault Grounded
+              {originLabel(buildup)}
             </span>
             <button type="button" onClick={copyRawSummary} className="inline-flex h-9 items-center gap-2 border border-line/10 px-3 hover:border-accent hover:text-accent">
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
@@ -965,7 +974,7 @@ function ScanHistory({
             </div>
             <h3 className="font-bold uppercase leading-tight">{item.label}</h3>
             <p className={cn("mt-2 font-mono text-[11px] uppercase", active?.id === item.id ? "text-bg/45" : "text-muted")}>
-              {passesDerivedQualityGate(item) ? "Opportunity detected" : "Watch item below gate"} // {buildupTheme(item)}
+              {item.origin === "derived" && !passesDerivedQualityGate(item) ? "Watch item below gate" : originLabel(item)} // {buildupTheme(item)}
             </p>
             <p className={cn("mt-4 inline-flex items-center gap-2 font-mono text-[11px] uppercase", active?.id === item.id ? "text-bg/70" : "text-muted")}>
               View report

@@ -71,7 +71,7 @@ export interface UltraDeepAnalysis {
 
 export interface Buildup {
   id: string;
-  origin: "explicit" | "derived" | "example";
+  origin: "explicit" | "parsed" | "derived" | "example";
   label: string;
   situation: string;
   coordinates?: Coordinates;

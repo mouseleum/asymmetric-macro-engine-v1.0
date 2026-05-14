@@ -458,21 +458,223 @@ function normalizeUltraDeepAnalysis(value: unknown, fallback: Buildup["ultraDeep
   };
 }
 
-function riskItemFromOpportunity(raw: AnyRecord, index: number): RiskItem {
-  const divergence = Math.max(0, Math.min(100, asNumber(raw.divergenceScore ?? raw.divergence_score ?? raw.divergenceMeter ?? raw.divergence_meter ?? raw.divergence, 50)));
-  const conviction = Math.max(0, Math.min(100, asNumber(raw.conviction ?? raw.convictionScore ?? raw.conviction_score ?? raw.score, divergence)));
+type ParsedReport = {
+  label?: string;
+  situation?: string;
+  coordinates?: Buildup["coordinates"];
+  observableFacts?: string[];
+  timeline?: string[];
+  binaryEvent?: string;
+  assetBasket?: Partial<Buildup["assetBasket"]>;
+  marketReaction?: string;
+  sentimentDivergence?: Partial<Buildup["sentimentDivergence"]>;
+  crowdedness?: string[];
+  catalysts?: string[];
+  invalidation?: string;
+  action?: string;
+  rawTelemetry?: string[];
+  ultraDeepAnalysis?: Partial<Buildup["ultraDeepAnalysis"]>;
+  divergenceScore?: number;
+  conviction?: number;
+  scoreBreakdown?: Partial<Buildup["scoreBreakdown"]>;
+};
+
+const reportSectionNames = [
+  "BUILDUP DETECTED",
+  "OBSERVABLE FACTS",
+  "TIMELINE",
+  "BINARY EVENT IMPLIED",
+  "ASSET CORRELATION BASKET",
+  "MARKET REACTION",
+  "SENTIMENT DIVERGENCE",
+  "CROWDEDNESS INDICATOR",
+  "COMPLACENCY CHECK",
+  "UPCOMING CATALYSTS",
+  "SCORE",
+  "DOWNSIDE",
+  "RAW TELEMETRY DATA",
+  "ULTRA DEEP ANALYSIS",
+  "TRADE STRUCTURING",
+  "RED TEAMING",
+  "SECOND & THIRD-ORDER EFFECTS",
+  "HISTORICAL ANALOGS",
+  "INVALIDATION TRIGGERS",
+];
+
+function getRawReport(raw: AnyRecord) {
+  return asString(raw.rawReport ?? raw.raw_report ?? raw.report ?? raw.content ?? raw.text ?? raw.body ?? raw.analysis);
+}
+
+function cleanReportText(value: string) {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripLinePrefix(value: string) {
+  return value
+    .replace(/^[\s>*•\-–—]+/, "")
+    .replace(/^Event\s*$/i, "")
+    .trim();
+}
+
+function splitReportLines(value: string) {
+  return value
+    .split("\n")
+    .map((line) => stripLinePrefix(line))
+    .filter(Boolean);
+}
+
+function scoreFromText(value: string | undefined) {
+  if (!value) return undefined;
+  const match = value.match(/(?:DIVERGENCE\s*(?:METER|SCORE)?|TOTAL|SCORE)\s*:?\s*(\d{1,3})(?:\s*\/\s*100)?/i);
+  if (!match) return undefined;
+  return Math.max(0, Math.min(100, Number(match[1])));
+}
+
+function extractBracketValue(report: string, label: string) {
+  const match = report.match(new RegExp(`\\[${label}\\s*:\\s*([^\\]]+)\\]`, "i"));
+  return match?.[1]?.trim();
+}
+
+function extractSection(report: string, headings: string[]) {
+  const escaped = headings.map((heading) => heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const allHeadings = reportSectionNames.map((heading) => heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const optionalParenthetical = `(?:\\s*\\([^\\n)]*\\))?`;
+  const match = report.match(new RegExp(`(?:^|\\n)\\s*(?:${escaped})${optionalParenthetical}\\s*:?\\s*\\n?([\\s\\S]*?)(?=\\n\\s*(?:${allHeadings})${optionalParenthetical}\\s*:?\\s*(?:\\n|$)|$)`, "i"));
+  return match?.[1]?.trim();
+}
+
+function extractInlineField(report: string, label: string) {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = report.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*:\\s*([^\\n]+)`, "i"));
+  return match?.[1]?.trim();
+}
+
+function extractAction(report: string) {
+  return report.match(/(?:^|\n)\s*(?:→\s*)?ACTION\s*:\s*([^\n]+)/i)?.[1]?.trim();
+}
+
+function parseCoordinates(report: string): Buildup["coordinates"] {
+  const bracket = extractBracketValue(report, "COORDINATES");
+  const geospatial = report.match(/Geospatial Lock\s*:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i);
+  const coordinateText = bracket ?? (geospatial ? `${geospatial[1]}, ${geospatial[2]}` : "");
+  const match = coordinateText.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (!match) return undefined;
+  return {
+    lat: Number(match[1]),
+    lon: Number(match[2]),
+  };
+}
+
+function firstStrongHeading(report: string) {
+  return splitReportLines(report).find((line) => /^[A-Z0-9][A-Z0-9\s"'()/:.-]{5,}$/.test(line) && !reportSectionNames.some((heading) => line.toUpperCase().startsWith(heading)));
+}
+
+function parseAssetBasket(report: string): ParsedReport["assetBasket"] | undefined {
+  const section = extractSection(report, ["ASSET CORRELATION BASKET", "ASSET CORRELATION BASKET (The \"Basket\")"]);
+  if (!section) return undefined;
+  return {
+    primaryLong: extractInlineField(section, "PRIMARY LONG"),
+    primaryShort: extractInlineField(section, "PRIMARY SHORT"),
+    proxies: asStringArray(extractInlineField(section, "CORRELATED PROXIES")?.split(/\s*&\s*|\s*,\s*/)),
+    hedge: extractInlineField(section, "HEDGE/SECONDARY") ?? extractInlineField(section, "HEDGE"),
+  };
+}
+
+function parseSentimentDivergence(report: string, divergenceScore?: number): ParsedReport["sentimentDivergence"] | undefined {
+  const section = extractSection(report, ["SENTIMENT DIVERGENCE"]);
+  if (!section) return undefined;
+  return {
+    groundTruth: extractInlineField(section, "Ground Truth"),
+    mainstreamNews: extractInlineField(section, "Mainstream News"),
+    divergenceLevel: divergenceLevel(divergenceScore ?? scoreFromText(section) ?? 50),
+    mispricingLogic: extractInlineField(section, "Mispricing Logic"),
+  };
+}
+
+function parseUltraDeepSection(report: string, headings: string[]) {
+  return asStringArray(extractSection(report, headings)?.split(/\n(?=[A-Z][A-Za-z0-9 "'()/&.-]+:\s*)|\n{2,}/));
+}
+
+function normalizeParsedAssetBasket(value: ParsedReport["assetBasket"], fallback: Buildup["assetBasket"]): Buildup["assetBasket"] {
+  if (!value) return fallback;
+  return {
+    primaryLong: asString(value.primaryLong, fallback.primaryLong),
+    primaryShort: asString(value.primaryShort, fallback.primaryShort),
+    proxies: value.proxies && value.proxies.length > 0 ? value.proxies : fallback.proxies,
+    hedge: asString(value.hedge, fallback.hedge),
+  };
+}
+
+function normalizeParsedUltraDeep(value: ParsedReport["ultraDeepAnalysis"], fallback: Buildup["ultraDeepAnalysis"]): Buildup["ultraDeepAnalysis"] {
+  if (!value) return fallback;
+  return {
+    tradeStructuring: value.tradeStructuring && value.tradeStructuring.length > 0 ? value.tradeStructuring : fallback.tradeStructuring,
+    redTeam: value.redTeam && value.redTeam.length > 0 ? value.redTeam : fallback.redTeam,
+    secondOrderEffects: value.secondOrderEffects && value.secondOrderEffects.length > 0 ? value.secondOrderEffects : fallback.secondOrderEffects,
+    historicalAnalogs: value.historicalAnalogs && value.historicalAnalogs.length > 0 ? value.historicalAnalogs : fallback.historicalAnalogs,
+    invalidationTriggers: value.invalidationTriggers && value.invalidationTriggers.length > 0 ? value.invalidationTriggers : fallback.invalidationTriggers,
+  };
+}
+
+function parseRawReport(value: string): ParsedReport | undefined {
+  const report = cleanReportText(value);
+  if (!report) return undefined;
+
+  const buildupSection = extractSection(report, ["BUILDUP DETECTED"]);
+  const situation = extractInlineField(report, "Situation") ?? splitReportLines(buildupSection ?? "")[0];
+  const divergenceScore = scoreFromText(report.match(/DIVERGENCE METER[\s\S]*?(?=\n|$)/i)?.[0] ?? report);
+  const totalScore = scoreFromText(extractSection(report, ["SCORE"]) ?? report);
+  const observableFacts = splitReportLines(extractSection(report, ["OBSERVABLE FACTS"]) ?? "").slice(0, 8);
+  const timelineText = extractSection(report, ["TIMELINE"]);
+  const rawTelemetry = splitReportLines(extractSection(report, ["RAW TELEMETRY DATA"]) ?? "");
+
+  return {
+    label: extractBracketValue(report, "LABEL") ?? firstStrongHeading(report),
+    situation,
+    coordinates: parseCoordinates(report),
+    observableFacts: observableFacts.length > 0 ? observableFacts : undefined,
+    timeline: timelineText ? timelineText.split(/\s*→\s*|\n/).map(stripLinePrefix).filter(Boolean) : undefined,
+    binaryEvent: extractSection(report, ["BINARY EVENT IMPLIED"]),
+    assetBasket: parseAssetBasket(report),
+    marketReaction: extractInlineField(report, "MARKET REACTION") ?? extractSection(report, ["MARKET REACTION"]),
+    sentimentDivergence: parseSentimentDivergence(report, divergenceScore),
+    crowdedness: splitReportLines(extractSection(report, ["CROWDEDNESS INDICATOR"]) ?? ""),
+    catalysts: splitReportLines(extractSection(report, ["UPCOMING CATALYSTS"]) ?? "").filter((line) => !/^Event$/i.test(line)),
+    invalidation: extractSection(report, ["DOWNSIDE"]),
+    action: extractAction(report),
+    rawTelemetry: rawTelemetry.length > 0 ? rawTelemetry : undefined,
+    divergenceScore,
+    conviction: totalScore ?? divergenceScore,
+    scoreBreakdown: totalScore ? { total: totalScore } : undefined,
+    ultraDeepAnalysis: {
+      tradeStructuring: parseUltraDeepSection(report, ["TRADE STRUCTURING & PROXIES", "TRADE STRUCTURING"]),
+      redTeam: parseUltraDeepSection(report, ["RED TEAMING", "RED TEAMING (DEVIL'S ADVOCATE)"]),
+      secondOrderEffects: parseUltraDeepSection(report, ["SECOND & THIRD-ORDER EFFECTS", "SECOND & THIRD ORDER EFFECTS"]),
+      historicalAnalogs: parseUltraDeepSection(report, ["HISTORICAL ANALOGS"]),
+      invalidationTriggers: parseUltraDeepSection(report, ["INVALIDATION TRIGGERS", "INVALIDATION TRIGGERS (KILL SWITCH)"]),
+    },
+  };
+}
+
+function riskItemFromOpportunity(raw: AnyRecord, index: number, parsed?: ParsedReport): RiskItem {
+  const divergence = Math.max(0, Math.min(100, asNumber(raw.divergenceScore ?? raw.divergence_score ?? raw.divergenceMeter ?? raw.divergence_meter ?? raw.divergence, parsed?.divergenceScore ?? 50)));
+  const conviction = Math.max(0, Math.min(100, asNumber(raw.conviction ?? raw.convictionScore ?? raw.conviction_score ?? raw.score, parsed?.conviction ?? divergence)));
   const sources = normalizeSources(raw.sources);
   return {
     id: asString(raw.id, `opportunity-${index}`),
-    title: asString(raw.label ?? raw.title ?? raw.name, `Opportunity ${index + 1}`),
-    summary: asString(raw.situation ?? raw.summary ?? raw.thesis ?? raw.description, "No situation supplied by Macro Vault."),
+    title: asString(raw.label ?? raw.title ?? raw.name, parsed?.label ?? `Opportunity ${index + 1}`),
+    summary: asString(raw.situation ?? raw.summary ?? raw.thesis ?? raw.description, parsed?.situation ?? "No situation supplied by Macro Vault."),
     severity: asSeverity(raw.severity ?? raw.riskLevel ?? raw.risk_level ?? divergence),
     conviction,
     divergence,
     status: asString(raw.status ?? raw.state, "opportunity"),
     updatedAt: asString(raw.updatedAt ?? raw.updated_at ?? raw.createdAt ?? raw.created_at ?? raw.timestamp, new Date().toISOString()),
-    catalysts: asStringArray(raw.catalysts ?? raw.upcomingCatalysts ?? raw.upcoming_catalysts),
-    invalidation: asString(raw.invalidation ?? raw.downside ?? raw.risk, "No downside scenario supplied by Macro Vault."),
+    catalysts: asStringArray(raw.catalysts ?? raw.upcomingCatalysts ?? raw.upcoming_catalysts, parsed?.catalysts),
+    invalidation: asString(raw.invalidation ?? raw.downside ?? raw.risk, parsed?.invalidation ?? "No downside scenario supplied by Macro Vault."),
     sources,
   };
 }
@@ -480,36 +682,41 @@ function riskItemFromOpportunity(raw: AnyRecord, index: number): RiskItem {
 function normalizeExplicitBuildups(payload: unknown, regime: RegimeSummary, series: SeriesItem[]): Buildup[] {
   const rows = getFirstArray(payload, ["buildups", "opportunities", "alerts", "reports", "setups"]);
   return rows.filter(isRecord).map((raw, index): Buildup => {
-    const item = riskItemFromOpportunity(raw, index);
+    const parsed = parseRawReport(getRawReport(raw));
+    const item = riskItemFromOpportunity(raw, index, parsed);
     const fallbackBasket = inferAssetBasket(item, series);
-    const assetBasket = normalizeAssetBasket(raw.assetBasket ?? raw.asset_basket ?? raw.basket, fallbackBasket);
+    const parsedBasket = normalizeParsedAssetBasket(parsed?.assetBasket, fallbackBasket);
+    const assetBasket = normalizeAssetBasket(raw.assetBasket ?? raw.asset_basket ?? raw.basket, parsedBasket);
     const fallbackUltraDeep = buildUltraDeepAnalysis(item, assetBasket);
-    const binaryEvent = asString(raw.binaryEvent ?? raw.binary_event ?? raw.trigger ?? raw.binaryTrigger ?? raw.binary_trigger, item.catalysts[0] ?? "A catalyst confirms or invalidates the setup.");
-    const timeline = asStringArray(raw.timeline, buildTimeline(item, regime));
+    const parsedUltraDeep = normalizeParsedUltraDeep(parsed?.ultraDeepAnalysis, fallbackUltraDeep);
+    const binaryEvent = asString(raw.binaryEvent ?? raw.binary_event ?? raw.trigger ?? raw.binaryTrigger ?? raw.binary_trigger, parsed?.binaryEvent ?? item.catalysts[0] ?? "A catalyst confirms or invalidates the setup.");
+    const timeline = asStringArray(raw.timeline, parsed?.timeline ?? buildTimeline(item, regime));
+    const scoreBreakdown = normalizeScoreBreakdown(raw.scoreBreakdown ?? raw.score_breakdown ?? raw.score, item);
+    const parsedScoreTotal = parsed?.scoreBreakdown?.total;
 
     return {
       id: item.id,
-      origin: "explicit",
+      origin: parsed ? "parsed" : "explicit",
       label: item.title,
       situation: item.summary,
-      coordinates: normalizeCoordinates(raw.coordinates ?? raw.coordinate ?? raw.location),
-      observableFacts: asStringArray(raw.observableFacts ?? raw.observable_facts ?? raw.facts, buildObservableFacts(item, regime)),
+      coordinates: normalizeCoordinates(raw.coordinates ?? raw.coordinate ?? raw.location) ?? parsed?.coordinates,
+      observableFacts: asStringArray(raw.observableFacts ?? raw.observable_facts ?? raw.facts, parsed?.observableFacts ?? buildObservableFacts(item, regime)),
       timeline,
       groundTruth: asString(raw.groundTruth ?? raw.ground_truth, `${item.status} signal held in Macro Vault with ${item.conviction}/100 confidence.`),
-      marketReaction: asString(raw.marketReaction ?? raw.market_reaction, item.divergence >= 70 ? "Market reaction appears underpriced versus the Vault signal." : "Market reaction is partial or aligned."),
+      marketReaction: asString(raw.marketReaction ?? raw.market_reaction, parsed?.marketReaction ?? (item.divergence >= 70 ? "Market reaction appears underpriced versus the Vault signal." : "Market reaction is partial or aligned.")),
       binaryEvent,
       assetBasket,
-      sentimentDivergence: normalizeSentimentDivergence(raw.sentimentDivergence ?? raw.sentiment_divergence, item),
-      crowdedness: asStringArray(raw.crowdedness ?? raw.crowdednessIndicator ?? raw.crowdedness_indicator, [
+      sentimentDivergence: normalizeSentimentDivergence(raw.sentimentDivergence ?? raw.sentiment_divergence ?? parsed?.sentimentDivergence, item),
+      crowdedness: asStringArray(raw.crowdedness ?? raw.crowdednessIndicator ?? raw.crowdedness_indicator, parsed?.crowdedness && parsed.crowdedness.length > 0 ? parsed.crowdedness : [
         item.divergence >= 70 ? "Social/Retail Sentiment: Quiet or distracted relative to the signal." : "Social/Retail Sentiment: Partially aware.",
         item.conviction >= 70 ? "Institutional Positioning: Vulnerable to repricing if the catalyst confirms." : "Institutional Positioning: No clear crowding edge supplied by Vault.",
         item.divergence >= 70 ? "Short Squeeze Risk: Elevated if the binary event lands." : "Short Squeeze Risk: Moderate.",
       ]),
       complacency: normalizeComplacency(raw.complacency ?? raw.complacencyCheck ?? raw.complacency_check, item),
-      scoreBreakdown: normalizeScoreBreakdown(raw.scoreBreakdown ?? raw.score_breakdown ?? raw.score, item),
-      action: asString(raw.action ?? raw.recommendedAction ?? raw.recommended_action, `Review ${assetBasket.primaryLong} versus ${assetBasket.primaryShort}; use ${assetBasket.hedge} as the risk-control leg.`),
-      ultraDeepAnalysis: normalizeUltraDeepAnalysis(raw.ultraDeepAnalysis ?? raw.ultra_deep_analysis ?? raw.deepAnalysis ?? raw.deep_analysis, fallbackUltraDeep),
-      rawTelemetry: asStringArray(raw.rawTelemetry ?? raw.raw_telemetry ?? raw.telemetry, buildRawTelemetry(item, series)),
+      scoreBreakdown: parsedScoreTotal && !isRecord(raw.scoreBreakdown ?? raw.score_breakdown) ? { ...scoreBreakdown, total: parsedScoreTotal } : scoreBreakdown,
+      action: asString(raw.action ?? raw.recommendedAction ?? raw.recommended_action, parsed?.action ?? `Review ${assetBasket.primaryLong} versus ${assetBasket.primaryShort}; use ${assetBasket.hedge} as the risk-control leg.`),
+      ultraDeepAnalysis: normalizeUltraDeepAnalysis(raw.ultraDeepAnalysis ?? raw.ultra_deep_analysis ?? raw.deepAnalysis ?? raw.deep_analysis, parsedUltraDeep),
+      rawTelemetry: asStringArray(raw.rawTelemetry ?? raw.raw_telemetry ?? raw.telemetry, parsed?.rawTelemetry ?? buildRawTelemetry(item, series)),
       divergenceScore: item.divergence,
       conviction: item.conviction,
       catalysts: item.catalysts,

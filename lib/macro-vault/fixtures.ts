@@ -119,6 +119,85 @@ export const mockVaultPayloads: Required<VaultPayloads> = {
           { title: "Macro Vault example chain", url: "https://macro-vault-v3.vercel.app" },
         ],
       },
+      {
+        id: "raw-hormuz-blockade",
+        report: `[LABEL: Hormuz Blockade]
+[COORDINATES: 26.56, 56.25]
+
+BUILDUP DETECTED
+Situation: Maritime chokepoint pressure around Hormuz is being treated as temporary noise while energy importers remain priced for uninterrupted flows.
+
+OBSERVABLE FACTS:
+Tanker routing delays have persisted through the latest monitoring window.
+European gas sensitivity remains elevated into the next inventory window.
+Brent is not fully reflecting route-risk optionality.
+
+TIMELINE:
+Prior: energy markets faded the initial route-risk shock → Current: shipping and insurance stress remains visible → Trigger: a verified naval incident or formal restriction breaks the calm.
+
+BINARY EVENT IMPLIED:
+A verified closure, strike, or insurance halt forces a rapid energy-risk repricing.
+
+ASSET CORRELATION BASKET:
+PRIMARY LONG: Brent Crude (BZ=F)
+PRIMARY SHORT: European cyclicals
+CORRELATED PROXIES: TTF gas, PAXG, freight rates
+HEDGE/SECONDARY: USD cash
+
+MARKET REACTION: Complacent / underhedged.
+
+SENTIMENT DIVERGENCE:
+Ground Truth: Route-risk pressure remains active.
+Mainstream News: Treating disruption as contained.
+DIVERGENCE METER: 88/100
+Mispricing Logic: Energy importers are priced for normal logistics while the chokepoint risk remains binary.
+
+UPCOMING CATALYSTS:
+Event
+Next tanker-insurance renewal window.
+Event
+Next EU gas storage print.
+
+SCORE:
+Visibility: 19/25
+Escalation: 23/25
+Mispricing: 22/25
+Directness: 21/25 TOTAL: 85/100
+→ ACTION: Review long energy volatility and short European cyclicals.
+
+DOWNSIDE:
+If routing normalizes and insurance spreads compress, the setup decays into a false alarm.
+
+Ultra Deep Analysis (Pro)
+TRADE STRUCTURING & PROXIES
+Use energy volatility rather than only outright crude to preserve convexity.
+Pair energy upside with importer-equity downside to reduce broad-market beta.
+
+RED TEAMING
+Shadow routing may be sufficient to prevent a physical shortage.
+Policy releases could blunt the near-term price impact.
+
+SECOND & THIRD-ORDER EFFECTS
+Shipping insurance can reprice before equities acknowledge the risk.
+Input-cost pressure can bleed into chemicals and heavy industry.
+
+HISTORICAL ANALOGS
+1973 oil shock.
+2022 European gas shock.
+
+INVALIDATION TRIGGERS
+Two consecutive weeks of normalized tanker flow.
+Brent fails to confirm while European cyclicals keep rallying.
+
+Raw Telemetry Data
+[LIVE MARKET_DATA API] BZ=F: route-risk premium muted.
+[LIVE SHIPPING_PROXY API] Hormuz: elevated delay signal.
+[LIVE SAFE_HAVEN_FLOWS API] Gold: modest bid.`,
+        updated_at: now,
+        sources: [
+          { title: "Raw old-engine report fixture", url: "https://macro-vault-v3.vercel.app" },
+        ],
+      },
     ],
     risks: [
       {

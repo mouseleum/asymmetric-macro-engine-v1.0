@@ -189,6 +189,7 @@ function mapRegion(buildup: Buildup) {
 
 function LocalMapLayer({ buildup }: { buildup: Buildup }) {
   const region = mapRegion(buildup);
+  const isGeneric = region === "generic";
   const labels =
     region === "hormuz"
       ? [
@@ -205,17 +206,48 @@ function LocalMapLayer({ buildup }: { buildup: Buildup }) {
             ["MEDITERRANEAN SEA", "left-[7%] top-[43%]"],
           ]
         : [
-            ["MACRO", "left-[9%] top-[55%]"],
-            [buildupTheme(buildup).toUpperCase(), "right-[12%] top-[20%]"],
-            ["VAULT SIGNAL", "right-[14%] bottom-[20%]"],
+            ["AMERICAS", "left-[16%] top-[35%]"],
+            ["EUROPE", "left-[47%] top-[27%]"],
+            ["ASIA", "right-[17%] top-[34%]"],
+            ["AFRICA", "left-[51%] top-[58%]"],
           ];
 
   return (
     <div className="absolute inset-0 bg-[#f8f8f5]">
-      <div className="absolute left-[4%] top-[16%] h-[58%] w-[88%] rotate-[-4deg] rounded-[48%] border border-accent/10 bg-white/70" />
-      <div className="absolute left-[24%] top-[27%] h-[45%] w-[52%] rotate-[10deg] rounded-[55%] bg-[#cfd7d8]" />
-      <div className="absolute left-[34%] top-[10%] h-[48%] w-[25%] rotate-[15deg] rounded-[48%] bg-[#f8f8f5]" />
-      <div className="absolute left-[50%] top-[25%] h-[54%] w-[38%] rotate-[6deg] rounded-[50%] bg-[#cfd7d8]" />
+      {isGeneric ? (
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1000 420" aria-hidden="true" preserveAspectRatio="none">
+          <rect width="1000" height="420" fill="#f8f8f5" />
+          <path
+            d="M103 158 C125 105 202 89 260 114 C308 135 316 181 283 214 C245 252 273 293 228 318 C174 348 82 306 70 243 C64 210 82 185 103 158 Z"
+            fill="#cfd7d8"
+          />
+          <path
+            d="M352 123 C393 93 474 98 519 128 C556 153 535 196 489 198 C444 201 428 228 383 214 C331 199 310 154 352 123 Z"
+            fill="#cfd7d8"
+          />
+          <path
+            d="M451 222 C489 205 541 224 560 262 C584 310 537 360 488 335 C447 315 421 247 451 222 Z"
+            fill="#cfd7d8"
+          />
+          <path
+            d="M577 130 C658 78 816 96 900 148 C948 178 935 231 872 246 C808 262 768 228 703 242 C628 257 542 214 555 167 C559 152 566 140 577 130 Z"
+            fill="#cfd7d8"
+          />
+          <path
+            d="M781 283 C815 267 873 284 892 321 C911 358 867 379 831 363 C796 347 753 297 781 283 Z"
+            fill="#cfd7d8"
+          />
+          <path d="M108 350 C238 378 392 361 501 377 C635 397 745 367 896 386" fill="none" stroke="#f27d26" strokeOpacity="0.12" />
+          <path d="M95 75 C238 49 363 79 503 67 C641 55 779 47 924 81" fill="none" stroke="#f27d26" strokeOpacity="0.12" />
+        </svg>
+      ) : (
+        <>
+          <div className="absolute left-[4%] top-[16%] h-[58%] w-[88%] rotate-[-4deg] rounded-[48%] border border-accent/10 bg-white/70" />
+          <div className="absolute left-[24%] top-[27%] h-[45%] w-[52%] rotate-[10deg] rounded-[55%] bg-[#cfd7d8]" />
+          <div className="absolute left-[34%] top-[10%] h-[48%] w-[25%] rotate-[15deg] rounded-[48%] bg-[#f8f8f5]" />
+          <div className="absolute left-[50%] top-[25%] h-[54%] w-[38%] rotate-[6deg] rounded-[50%] bg-[#cfd7d8]" />
+        </>
+      )}
       {labels.map(([label, position]) => (
         <span
           key={label}

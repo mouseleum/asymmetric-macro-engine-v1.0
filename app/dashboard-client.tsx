@@ -165,13 +165,24 @@ function passesDerivedQualityGate(buildup: Buildup) {
 }
 
 function opportunityStatusText(model: DashboardModel, reportableCount: number) {
-  if (model.diagnostics.opportunities.mode === "explicit") {
+  if (model.diagnostics.opportunities.parsedCount > 0) {
+    return `${model.diagnostics.opportunities.parsedCount} raw Vault report${model.diagnostics.opportunities.parsedCount === 1 ? "" : "s"} parsed into opportunities.`;
+  }
+  if (model.diagnostics.opportunities.explicitCount > 0) {
     return `${model.diagnostics.opportunities.explicitCount} explicit opportunities returned by Macro Vault.`;
   }
   if (reportableCount > 0) {
     return `${reportableCount} derived item cleared the strict alert gate.`;
   }
   return `No explicit opportunities returned. ${model.diagnostics.opportunities.derivedCount} derived Vault watch items held below the alert gate.`;
+}
+
+function parserCoverageText(model: DashboardModel) {
+  const { explicitCount, parsedCount, derivedCount } = model.diagnostics.opportunities;
+  const coordinateCount = model.buildups.filter((buildup) => buildup.coordinates).length;
+  const telemetryCount = model.buildups.filter((buildup) => buildup.rawTelemetry.length > 0).length;
+
+  return `${parsedCount} parsed raw // ${explicitCount} explicit // ${derivedCount} derived // ${coordinateCount} mapped // ${telemetryCount} telemetry-backed`;
 }
 
 function originLabel(buildup: Buildup) {
@@ -1121,6 +1132,9 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
       <StatusBanner model={model} />
       <div className="border-b border-line/10 bg-paper px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
         Vault feed status: {feedStatus}
+      </div>
+      <div className="border-b border-line/10 bg-bg px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
+        Parser coverage: {parserCoverageText(model)}
       </div>
 
       <div className="grid lg:grid-cols-[1fr_360px]">

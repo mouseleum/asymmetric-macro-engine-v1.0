@@ -825,6 +825,9 @@ export function normalizeDashboardModel(
   const regime = normalizeRegime(payloads.regime);
   const explicitOpportunityCount = countExplicitOpportunities(payloads["dashboard-feed"]);
   const buildups = normalizeBuildups(payloads["dashboard-feed"], riskItems, regime, series);
+  const explicitCount = buildups.filter((buildup) => buildup.origin === "explicit").length;
+  const parsedCount = buildups.filter((buildup) => buildup.origin === "parsed").length;
+  const derivedCount = buildups.filter((buildup) => buildup.origin === "derived").length;
   const normalizedDiagnostics: DashboardDiagnostics = {
     endpoints: diagnostics?.endpoints ?? [],
     latestSeries: diagnostics?.latestSeries ?? {
@@ -833,9 +836,10 @@ export function normalizeDashboardModel(
       country: "WLD",
     },
     opportunities: {
-      mode: explicitOpportunityCount > 0 ? "explicit" : "derived",
-      explicitCount: explicitOpportunityCount,
-      derivedCount: explicitOpportunityCount > 0 ? 0 : riskItems.length,
+      mode: parsedCount > 0 ? "parsed" : explicitCount > 0 ? "explicit" : "derived",
+      explicitCount,
+      parsedCount,
+      derivedCount: explicitOpportunityCount > 0 ? derivedCount : riskItems.length,
     },
   };
 

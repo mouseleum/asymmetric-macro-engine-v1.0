@@ -28,6 +28,10 @@ test("parses old-engine raw reports into structured buildups", () => {
   assert.ok(buildup.rawTelemetry.some((item) => item.includes("LIVE SHIPPING_PROXY API")));
   assert.ok(buildup.ultraDeepAnalysis.tradeStructuring.some((item) => /energy volatility/i.test(item)));
   assert.ok(buildup.ultraDeepAnalysis.redTeam.some((item) => /Shadow routing/i.test(item)));
+  assert.equal(model.diagnostics.opportunities.mode, "parsed");
+  assert.equal(model.diagnostics.opportunities.explicitCount, 1);
+  assert.equal(model.diagnostics.opportunities.parsedCount, 1);
+  assert.equal(model.diagnostics.opportunities.derivedCount, 0);
 });
 
 test("keeps explicit structured fields ahead of parsed raw text", () => {
@@ -117,5 +121,6 @@ test("still derives watch buildups when no explicit opportunities exist", () => 
 
   assert.ok(model.buildups.length > 0);
   assert.equal(model.diagnostics.opportunities.mode, "derived");
+  assert.equal(model.diagnostics.opportunities.parsedCount, 0);
   assert.ok(model.buildups.every((item) => item.origin === "derived"));
 });

@@ -165,8 +165,9 @@ export interface DashboardDiagnostics {
     country: string;
   };
   opportunities: {
-    mode: "explicit" | "derived";
+    mode: "explicit" | "parsed" | "derived";
     explicitCount: number;
+    parsedCount: number;
     derivedCount: number;
   };
 }

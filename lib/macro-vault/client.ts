@@ -111,6 +111,7 @@ export async function getDashboardModel(): Promise<DashboardModel> {
       opportunities: {
         mode: "derived",
         explicitCount: 0,
+        parsedCount: 0,
         derivedCount: 0,
       },
     };
@@ -163,6 +164,7 @@ export async function getDashboardModel(): Promise<DashboardModel> {
     opportunities: {
       mode: "derived",
       explicitCount: 0,
+      parsedCount: 0,
       derivedCount: 0,
     },
   });

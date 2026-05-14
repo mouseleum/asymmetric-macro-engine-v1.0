@@ -186,7 +186,6 @@ function mapEmbedUrl(buildup: Buildup) {
   const params = new URLSearchParams({
     bbox,
     layer: "mapnik",
-    marker: `${lat.toFixed(5)},${lon.toFixed(5)}`,
   });
   return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
 }
@@ -396,7 +395,7 @@ function SignalMap({ buildup }: { buildup: Buildup }) {
   const externalUrl = mapExternalUrl(buildup);
 
   return (
-    <div className="border border-line/10 bg-[#eef0ed]">
+    <div className="border border-line/10 bg-[#eef0ed] p-1">
       <div className="relative h-[260px] overflow-hidden border-b border-line/10 md:h-[360px]">
         {embedUrl ? (
           <>
@@ -405,11 +404,12 @@ function SignalMap({ buildup }: { buildup: Buildup }) {
               src={embedUrl}
               loading="lazy"
               referrerPolicy="no-referrer"
-              className="h-full w-full grayscale-[0.25] sepia-[0.08]"
+              className="h-full w-full opacity-[0.82] grayscale-[0.18] sepia-[0.08]"
             />
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-paper/90 to-paper/0 px-4 py-3">
-              <span className="font-mono text-[10px] font-bold uppercase text-ink">Live Map Layer</span>
-              <span className="font-mono text-[10px] uppercase text-muted">{buildupTheme(buildup)}</span>
+            <div className="pointer-events-none absolute inset-0 bg-white/10" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2">
+              <span className="signal-pulse absolute inset-0 rounded-full bg-accent/45" />
+              <span className="absolute left-1/2 top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-accent shadow-[0_0_0_1px_#f27d26,0_6px_20px_rgba(242,125,38,0.35)]" />
             </div>
           </>
         ) : (
@@ -432,13 +432,14 @@ function SignalMap({ buildup }: { buildup: Buildup }) {
                 -
               </button>
             </div>
-            <div className="absolute left-[50%] top-[49%] -translate-x-1/2 -translate-y-1/2">
-              <span className="block h-5 w-5 rounded-full border-4 border-white bg-accent shadow-[0_0_0_1px_#f27d26]" />
+            <div className="absolute left-[50%] top-[49%] h-8 w-8 -translate-x-1/2 -translate-y-1/2">
+              <span className="signal-pulse absolute inset-0 rounded-full bg-accent/45" />
+              <span className="absolute left-1/2 top-1/2 block h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-accent shadow-[0_0_0_1px_#f27d26]" />
             </div>
           </>
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 font-mono text-[11px] uppercase text-muted">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f2f2f0] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">
         <span className="inline-flex items-center gap-2">
           <MapPin className="h-4 w-4" aria-hidden="true" />
           {buildup.coordinates

@@ -75,6 +75,28 @@ function asSeverity(value: unknown): RiskItem["severity"] {
   return "medium";
 }
 
+function redactRawValue(key: string, value: unknown): unknown {
+  if (/api[_-]?key|token|secret|password|authorization|bearer|credential/i.test(key)) return "[REDACTED]";
+  if (typeof value === "string") {
+    return value
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+      .replace(/\b(?:sk|pk|eyJ)[A-Za-z0-9._~+/=-]{16,}\b/g, "[REDACTED]");
+  }
+  return value;
+}
+
+function buildRawPreview(value: unknown) {
+  try {
+    return JSON.stringify(
+      value,
+      (key, currentValue) => redactRawValue(key, currentValue),
+      2,
+    ).slice(0, 6000);
+  } catch {
+    return "[Unable to serialize raw Vault payload]";
+  }
+}
+
 function normalizeSources(value: unknown): Buildup["sources"] {
   return asArray(value)
     .filter(isRecord)
@@ -219,6 +241,7 @@ function normalizeRiskItems(payload: unknown): RiskItem[] {
           ].filter(Boolean),
       invalidation: asString(item.invalidation ?? item.downside ?? item.risk, "The release lands in line with consensus and produces no cross-asset repricing."),
       sources,
+      rawPreview: buildRawPreview(item),
     };
   });
 }
@@ -676,6 +699,7 @@ function riskItemFromOpportunity(raw: AnyRecord, index: number, parsed?: ParsedR
     catalysts: asStringArray(raw.catalysts ?? raw.upcomingCatalysts ?? raw.upcoming_catalysts, parsed?.catalysts),
     invalidation: asString(raw.invalidation ?? raw.downside ?? raw.risk, parsed?.invalidation ?? "No downside scenario supplied by Macro Vault."),
     sources,
+    rawPreview: buildRawPreview(raw),
   };
 }
 
@@ -725,6 +749,7 @@ function normalizeExplicitBuildups(payload: unknown, regime: RegimeSummary, seri
       status: item.status,
       updatedAt: item.updatedAt,
       sources: item.sources,
+      rawPreview: item.rawPreview,
     };
   });
 }
@@ -787,6 +812,7 @@ function normalizeDerivedBuildups(riskItems: RiskItem[], regime: RegimeSummary, 
       status: item.status,
       updatedAt: item.updatedAt,
       sources: item.sources,
+      rawPreview: item.rawPreview,
     };
   });
 }

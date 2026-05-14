@@ -45,6 +45,8 @@ test("keeps explicit structured fields ahead of parsed raw text", () => {
         coordinates: { lat: 1.23, lon: 4.56, label: "Structured Point" },
         divergenceScore: 77,
         conviction: 66,
+        api_key: "secret-vault-key",
+        authorization: "Bearer live-secret-token",
         assetBasket: {
           primaryLong: "Structured Long",
           primaryShort: "Structured Short",
@@ -80,6 +82,9 @@ HEDGE/SECONDARY: Parsed Hedge`,
   assert.equal(buildup.assetBasket.primaryShort, "Structured Short");
   assert.deepEqual(buildup.assetBasket.proxies, ["Structured Proxy"]);
   assert.equal(buildup.assetBasket.hedge, "Structured Hedge");
+  assert.match(buildup.rawPreview, /Structured Title/);
+  assert.doesNotMatch(buildup.rawPreview, /secret-vault-key|live-secret-token/);
+  assert.match(buildup.rawPreview, /\[REDACTED\]/);
 });
 
 test("renders partial raw reports without crashing", () => {
@@ -123,4 +128,5 @@ test("still derives watch buildups when no explicit opportunities exist", () => 
   assert.equal(model.diagnostics.opportunities.mode, "derived");
   assert.equal(model.diagnostics.opportunities.parsedCount, 0);
   assert.ok(model.buildups.every((item) => item.origin === "derived"));
+  assert.ok(model.buildups.every((item) => item.rawPreview.includes(item.label)));
 });

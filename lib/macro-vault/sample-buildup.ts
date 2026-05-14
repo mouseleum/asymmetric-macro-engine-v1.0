@@ -102,4 +102,14 @@ export const sampleNorthernFrontBuildup: Buildup = {
   status: "example",
   updatedAt: "2026-05-13T20:30:39.000Z",
   sources: [{ title: "Sample old-engine report", url: "https://macro-vault-v3.vercel.app" }],
+  rawPreview: JSON.stringify(
+    {
+      id: "sample-northern-front-expansion",
+      origin: "local-example",
+      reportShape: "old-engine buildup report",
+      source: "Sample old-engine report",
+    },
+    null,
+    2,
+  ),
 };

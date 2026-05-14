@@ -946,6 +946,14 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
               <dd className="text-right text-ink">{passesDerivedQualityGate(buildup) ? "eligible" : "watch-grade"}</dd>
             </div>
           </dl>
+          <details className="mt-4 border border-line/10 bg-bg/60 p-4">
+            <summary className="cursor-pointer font-mono text-[11px] font-bold uppercase tracking-normal text-muted hover:text-accent">
+              Raw Vault Payload Preview
+            </summary>
+            <pre className="mt-4 max-h-[360px] overflow-auto whitespace-pre-wrap break-words border-t border-line/10 pt-4 font-mono text-[11px] leading-relaxed text-muted">
+              {buildup.rawPreview}
+            </pre>
+          </details>
         </details>
       </section>
     </article>

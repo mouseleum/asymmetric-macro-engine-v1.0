@@ -25,6 +25,7 @@ export interface RiskItem {
   catalysts: string[];
   invalidation: string;
   sources: SourceLink[];
+  rawPreview: string;
 }
 
 export interface AssetBasket {
@@ -96,6 +97,7 @@ export interface Buildup {
   status: string;
   updatedAt: string;
   sources: SourceLink[];
+  rawPreview: string;
 }
 
 export interface MacroEvent {

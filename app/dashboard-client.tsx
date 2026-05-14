@@ -284,6 +284,14 @@ function CommandBar({
   const [isRunning, setIsRunning] = useState(false);
   const queryInputRef = useRef<HTMLInputElement>(null);
 
+  function promptForTarget() {
+    const nextQuery = window.prompt("Target opportunity", query);
+    if (nextQuery !== null) {
+      setQuery(nextQuery);
+      queryInputRef.current?.blur();
+    }
+  }
+
   function runResearchPass() {
     const keywords = tokenizeSearch(query);
     const startedAt = new Date().toISOString();
@@ -358,13 +366,19 @@ function CommandBar({
           <input
             ref={queryInputRef}
             id="target-opportunity"
-            autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Target Opportunity"
             className="h-12 w-full border border-line/10 bg-paper pl-11 pr-4 font-mono text-sm uppercase outline-none placeholder:text-muted/35 hover:border-accent focus:border-accent"
           />
         </div>
+        <button
+          type="button"
+          onClick={promptForTarget}
+          className="inline-flex h-12 min-w-[118px] items-center justify-center border border-line/20 bg-paper px-4 font-mono text-[11px] font-bold uppercase text-ink hover:border-accent hover:text-accent"
+        >
+          Set Target
+        </button>
 
         <div className="flex min-w-0 flex-wrap items-center gap-3 border border-line/10 bg-paper px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2 border-r border-line/10 pr-4 font-mono text-[11px] font-bold uppercase text-accent">

@@ -296,12 +296,14 @@ function CommandBar({
   onComplete,
   onStart,
   onLoadExample,
+  onLoadParserDemo,
 }: {
   model: DashboardModel;
   buildups: Buildup[];
   onStart: (run: ResearchRun) => void;
   onComplete: (run: ResearchRun) => void;
   onLoadExample: () => void;
+  onLoadParserDemo?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [targetEditorOpen, setTargetEditorOpen] = useState(false);
@@ -448,6 +450,15 @@ function CommandBar({
         >
           Example Report
         </button>
+        {onLoadParserDemo ? (
+          <button
+            type="button"
+            onClick={onLoadParserDemo}
+            className="inline-flex h-14 min-w-[145px] items-center justify-center gap-2 border border-line/20 bg-paper px-5 font-mono text-xs font-bold uppercase text-ink hover:border-accent hover:text-accent"
+          >
+            Parser Demo
+          </button>
+        ) : null}
       </div>
 
       {targetEditorOpen ? (
@@ -1014,7 +1025,7 @@ function ScanHistory({
   );
 }
 
-export function DashboardClient({ model }: { model: DashboardModel }) {
+export function DashboardClient({ model, parserDemoBuildup }: { model: DashboardModel; parserDemoBuildup?: Buildup }) {
   const sortedBuildups = useMemo(
     () => [...model.buildups].sort((a, b) => b.conviction + b.divergenceScore - (a.conviction + a.divergenceScore)),
     [model.buildups],
@@ -1034,8 +1045,13 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
     rejectedByThreshold: 0,
   });
   const [exampleLoaded, setExampleLoaded] = useState(false);
+  const [parserDemoLoaded, setParserDemoLoaded] = useState(false);
 
-  const displayBuildups = exampleLoaded ? [sampleNorthernFrontBuildup, ...sortedBuildups] : sortedBuildups;
+  const displayBuildups = [
+    ...(exampleLoaded ? [sampleNorthernFrontBuildup] : []),
+    ...(parserDemoLoaded && parserDemoBuildup ? [parserDemoBuildup] : []),
+    ...sortedBuildups,
+  ];
   const reportableBuildups = displayBuildups.filter(passesDerivedQualityGate);
   const researchBuildups = researchRun.phase === "alert-found" ? researchRun.results.map((result) => result.buildup) : [];
   const selectableBuildups = researchBuildups.length > 0 ? researchBuildups : reportableBuildups;
@@ -1079,6 +1095,27 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
               rejectedByThreshold: 0,
             });
           }}
+          onLoadParserDemo={
+            parserDemoBuildup
+              ? () => {
+                  setParserDemoLoaded(true);
+                  setSelectedId(parserDemoBuildup.id);
+                  setResearchRun({
+                    phase: "idle",
+                    hasRun: false,
+                    query: "",
+                    keywords: [],
+                    threshold: 60,
+                    results: [],
+                    scanned: 0,
+                    rejected: 0,
+                    rejectedByQuality: 0,
+                    rejectedByKeyword: 0,
+                    rejectedByThreshold: 0,
+                  });
+                }
+              : undefined
+          }
         />
       </div>
       <StatusBanner model={model} />

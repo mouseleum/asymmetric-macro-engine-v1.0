@@ -268,8 +268,7 @@ function CommandBar({
     setIsRunning(true);
     window.setTimeout(() => {
       const qualityRejected = buildups.filter((buildup) => !passesDerivedQualityGate(buildup));
-      const qualityPassed = buildups.filter(passesDerivedQualityGate);
-      const keywordMatched = qualityPassed
+      const keywordMatched = buildups
         .map((buildup) => scoreBuildupForResearch(buildup, keywords))
         .filter((result): result is ResearchResult => Boolean(result));
       const results = keywordMatched
@@ -277,7 +276,7 @@ function CommandBar({
         .sort((a, b) => b.score - a.score)
         .slice(0, 8);
       const thresholdRejected = keywordMatched.filter((result) => result.score < threshold);
-      const keywordRejected = qualityPassed.length - keywordMatched.length;
+      const keywordRejected = buildups.length - keywordMatched.length;
       const topQualityRejected = qualityRejected
         .map(scoreBuildupWithoutKeywordFilter)
         .sort((a, b) => b.score - a.score)[0];
@@ -286,7 +285,7 @@ function CommandBar({
       const topRejectedReason = topThresholdRejected
         ? `Score ${topThresholdRejected.score} did not clear threshold ${threshold}.`
         : topQualityRejected
-          ? "Rejected by strict derived-quality gate."
+          ? "Below the strict passive-dashboard quality gate."
           : keywordRejected > 0
             ? "Rejected by keyword mismatch."
             : undefined;
@@ -807,9 +806,9 @@ function NoAlertReport({
       </div>
       <div className="mt-8 grid gap-3 font-mono text-[11px] uppercase text-muted">
         <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
-          <span>Quality gate</span>
+          <span>Strict quality read</span>
           <span className={run.rejectedByQuality > 0 ? "text-accent" : "text-good"}>
-            {run.rejectedByQuality > 0 ? `${run.rejectedByQuality} rejected` : "Clear"}
+            {run.rejectedByQuality > 0 ? `${run.rejectedByQuality} watch-grade` : "Clear"}
           </span>
         </div>
         <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
@@ -847,7 +846,7 @@ function NoAlertReport({
           <dd className="mt-2 text-ink">{run.rejected}</dd>
         </div>
         <div>
-          <dt>Quality gate</dt>
+          <dt>Watch-grade</dt>
           <dd className="mt-2 text-ink">{run.rejectedByQuality}</dd>
         </div>
         <div>
@@ -972,9 +971,11 @@ export function DashboardClient({ model }: { model: DashboardModel }) {
 
   const displayBuildups = exampleLoaded ? [sampleNorthernFrontBuildup, ...sortedBuildups] : sortedBuildups;
   const reportableBuildups = displayBuildups.filter(passesDerivedQualityGate);
-  const activeBuildup = reportableBuildups.find((item) => item.id === selectedId) ?? reportableBuildups[0];
+  const researchBuildups = researchRun.phase === "alert-found" ? researchRun.results.map((result) => result.buildup) : [];
+  const selectableBuildups = researchBuildups.length > 0 ? researchBuildups : reportableBuildups;
+  const activeBuildup = selectableBuildups.find((item) => item.id === selectedId) ?? selectableBuildups[0];
   const showScanning = researchRun.phase === "scanning";
-  const showNoAlert = !showScanning && (reportableBuildups.length === 0 || researchRun.phase === "no-alert");
+  const showNoAlert = !showScanning && (researchRun.phase === "no-alert" || (!researchRun.hasRun && reportableBuildups.length === 0));
   const feedStatus = opportunityStatusText(model, reportableBuildups.length);
 
   function startResearch(run: ResearchRun) {

@@ -173,6 +173,30 @@ function opportunityStatusText(model: DashboardModel, reportableCount: number) {
   return `No explicit opportunities returned. ${model.diagnostics.opportunities.derivedCount} derived Vault watch items held below the alert gate.`;
 }
 
+function mapEmbedUrl(buildup: Buildup) {
+  if (!buildup.coordinates) return "";
+  const { lat, lon } = buildup.coordinates;
+  const spread = 1.8;
+  const bbox = [
+    (lon - spread).toFixed(4),
+    (lat - spread * 0.72).toFixed(4),
+    (lon + spread).toFixed(4),
+    (lat + spread * 0.72).toFixed(4),
+  ].join(",");
+  const params = new URLSearchParams({
+    bbox,
+    layer: "mapnik",
+    marker: `${lat.toFixed(5)},${lon.toFixed(5)}`,
+  });
+  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+}
+
+function mapExternalUrl(buildup: Buildup) {
+  if (!buildup.coordinates) return "";
+  const { lat, lon } = buildup.coordinates;
+  return `https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lon.toFixed(5)}#map=7/${lat.toFixed(5)}/${lon.toFixed(5)}`;
+}
+
 function StatusBanner({ model }: { model: DashboardModel }) {
   if (model.errors.length === 0 && model.freshness.mode === "live") return null;
 
@@ -368,36 +392,65 @@ function CommandBar({
 }
 
 function SignalMap({ buildup }: { buildup: Buildup }) {
+  const embedUrl = mapEmbedUrl(buildup);
+  const externalUrl = mapExternalUrl(buildup);
+
   return (
     <div className="border border-line/10 bg-[#eef0ed]">
       <div className="relative h-[260px] overflow-hidden border-b border-line/10 md:h-[360px]">
-        <div className="absolute inset-0 opacity-70">
-          <div className="absolute left-[7%] top-[22%] h-28 w-[86%] rounded-[55%] border border-accent/10 bg-white/35" />
-          <div className="absolute left-[12%] top-[48%] h-px w-[78%] rotate-[-8deg] bg-accent/10" />
-          <div className="absolute left-[18%] top-[30%] h-px w-[72%] rotate-[12deg] bg-accent/10" />
-          <div className="absolute left-[28%] top-[13%] h-[82%] w-px rotate-[18deg] bg-line/10" />
-          <div className="absolute left-[59%] top-[4%] h-[92%] w-px rotate-[-14deg] bg-line/10" />
-          <div className="absolute bottom-8 left-14 font-mono text-lg font-bold uppercase text-muted/30">Macro</div>
-          <div className="absolute right-16 top-16 font-mono text-sm font-bold uppercase text-muted/30">{buildupTheme(buildup)}</div>
-          <div className="absolute bottom-16 right-20 font-mono text-xs font-bold uppercase text-muted/30">Vault Signal</div>
-        </div>
-        <div className="absolute left-5 top-5 overflow-hidden border border-line/30 bg-white shadow-sm">
-          <button type="button" className="grid h-10 w-10 place-items-center border-b border-line/20 text-2xl font-bold" aria-label="Zoom in">
-            +
-          </button>
-          <button type="button" className="grid h-10 w-10 place-items-center text-2xl font-bold" aria-label="Zoom out">
-            -
-          </button>
-        </div>
-        <div className="absolute left-[50%] top-[49%] -translate-x-1/2 -translate-y-1/2">
-          <span className="block h-5 w-5 rounded-full border-4 border-white bg-accent shadow-[0_0_0_1px_#f27d26]" />
-        </div>
+        {embedUrl ? (
+          <>
+            <iframe
+              title={`${buildup.label} geospatial map`}
+              src={embedUrl}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="h-full w-full grayscale-[0.25] sepia-[0.08]"
+            />
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-paper/90 to-paper/0 px-4 py-3">
+              <span className="font-mono text-[10px] font-bold uppercase text-ink">Live Map Layer</span>
+              <span className="font-mono text-[10px] uppercase text-muted">{buildupTheme(buildup)}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 opacity-70">
+              <div className="absolute left-[7%] top-[22%] h-28 w-[86%] rounded-[55%] border border-accent/10 bg-white/35" />
+              <div className="absolute left-[12%] top-[48%] h-px w-[78%] rotate-[-8deg] bg-accent/10" />
+              <div className="absolute left-[18%] top-[30%] h-px w-[72%] rotate-[12deg] bg-accent/10" />
+              <div className="absolute left-[28%] top-[13%] h-[82%] w-px rotate-[18deg] bg-line/10" />
+              <div className="absolute left-[59%] top-[4%] h-[92%] w-px rotate-[-14deg] bg-line/10" />
+              <div className="absolute bottom-8 left-14 font-mono text-lg font-bold uppercase text-muted/30">Macro</div>
+              <div className="absolute right-16 top-16 font-mono text-sm font-bold uppercase text-muted/30">{buildupTheme(buildup)}</div>
+              <div className="absolute bottom-16 right-20 font-mono text-xs font-bold uppercase text-muted/30">Vault Signal</div>
+            </div>
+            <div className="absolute left-5 top-5 overflow-hidden border border-line/30 bg-white shadow-sm">
+              <button type="button" className="grid h-10 w-10 place-items-center border-b border-line/20 text-2xl font-bold" aria-label="Zoom in">
+                +
+              </button>
+              <button type="button" className="grid h-10 w-10 place-items-center text-2xl font-bold" aria-label="Zoom out">
+                -
+              </button>
+            </div>
+            <div className="absolute left-[50%] top-[49%] -translate-x-1/2 -translate-y-1/2">
+              <span className="block h-5 w-5 rounded-full border-4 border-white bg-accent shadow-[0_0_0_1px_#f27d26]" />
+            </div>
+          </>
+        )}
       </div>
-      <div className="flex items-center gap-2 px-4 py-3 font-mono text-[11px] uppercase text-muted">
-        <MapPin className="h-4 w-4" aria-hidden="true" />
-        {buildup.coordinates
-          ? `Geospatial Lock: ${buildup.coordinates.lat.toFixed(2)}, ${buildup.coordinates.lon.toFixed(2)}${buildup.coordinates.label ? ` // ${buildup.coordinates.label}` : ""}`
-          : "Geospatial Lock: Vault-derived signal cluster"}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 font-mono text-[11px] uppercase text-muted">
+        <span className="inline-flex items-center gap-2">
+          <MapPin className="h-4 w-4" aria-hidden="true" />
+          {buildup.coordinates
+            ? `Geospatial Lock: ${buildup.coordinates.lat.toFixed(2)}, ${buildup.coordinates.lon.toFixed(2)}${buildup.coordinates.label ? ` // ${buildup.coordinates.label}` : ""}`
+            : "Geospatial Lock: Vault-derived signal cluster"}
+        </span>
+        {externalUrl ? (
+          <a href={externalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-accent">
+            Open map
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
+        ) : null}
       </div>
     </div>
   );

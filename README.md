@@ -1,20 +1,48 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Asymmetrical Macro Finder
 
-# Run and deploy your AI Studio app
+Thin Next.js dashboard for reading Macro Vault intelligence as an editorial macro-risk briefing.
 
-This contains everything you need to run your app locally.
+Macro Vault is the only data/storage layer. This app does not connect directly to Supabase, scrape market data, run Gemini scans, or send Telegram alerts.
 
-View your app in AI Studio: https://ai.studio/apps/0a888c9d-d2cb-4331-86c7-fc9f9c715b0e
+## Local Setup
 
-## Run Locally
+```bash
+npm install
+cp .env.example .env.local
+npm run dev -- --port 3000
+```
 
-**Prerequisites:**  Node.js
+Required server-side environment:
 
+- `MACRO_VAULT_URL`
+- `MACRO_VAULT_API_KEY`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Optional mock mode:
+
+- `NEXT_PUBLIC_USE_MOCK_VAULT=true`
+
+## Macro Vault Endpoints
+
+The app consumes these server-side only:
+
+- `GET /api/vault/contract`
+- `GET /api/vault/dashboard-feed`
+- `GET /api/vault/events`
+- `GET /api/vault/regime`
+- `GET /api/vault/series`
+- `GET /api/vault/latest`
+
+## Opportunity Contract
+
+Preferred explicit opportunity payloads are documented in:
+
+`docs/macro-vault-opportunity-contract.md`
+
+If Macro Vault does not return explicit opportunities, the app can derive watch items from generic dashboard-feed rows. Derived items are held below the main alert report unless they clear a strict quality gate.
+
+## Verification
+
+```bash
+npm run typecheck
+npm run build
+```

@@ -303,17 +303,10 @@ function CommandBar({
   onLoadExample: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [targetEditorOpen, setTargetEditorOpen] = useState(false);
   const [threshold, setThreshold] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
   const queryInputRef = useRef<HTMLInputElement>(null);
-
-  function promptForTarget() {
-    const nextQuery = window.prompt("Target opportunity", query);
-    if (nextQuery !== null) {
-      setQuery(nextQuery);
-      queryInputRef.current?.blur();
-    }
-  }
 
   function runResearchPass() {
     const keywords = tokenizeSearch(query);
@@ -397,7 +390,7 @@ function CommandBar({
         </div>
         <button
           type="button"
-          onClick={promptForTarget}
+          onClick={() => setTargetEditorOpen((value) => !value)}
           className="inline-flex h-12 min-w-[118px] items-center justify-center border border-line/20 bg-paper px-4 font-mono text-[11px] font-bold uppercase text-ink hover:border-accent hover:text-accent"
         >
           Set Target
@@ -450,6 +443,33 @@ function CommandBar({
           Example Report
         </button>
       </div>
+
+      {targetEditorOpen ? (
+        <div className="mt-4 border border-line/10 bg-paper p-4">
+          <label htmlFor="target-opportunity-expanded" className="font-mono text-[11px] font-bold uppercase text-muted">
+            Target opportunity
+          </label>
+          <textarea
+            id="target-opportunity-expanded"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Type search words, tickers, region, thesis..."
+            className="mt-2 min-h-24 w-full resize-y border border-line/10 bg-bg p-3 font-mono text-sm outline-none placeholder:text-muted/45 focus:border-accent"
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {["Hormuz", "energy shock", "DAX", "Lebanon", "credit stress"].map((target) => (
+              <button
+                key={target}
+                type="button"
+                onClick={() => setQuery(target)}
+                className="border border-line/10 px-3 py-2 font-mono text-[10px] font-bold uppercase text-muted hover:border-accent hover:text-accent"
+              >
+                {target}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[10px] uppercase text-muted">
         <span>Regime: {model.regime.label}</span>
@@ -528,6 +548,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
     ].join("\n");
 
     try {
+      if (!navigator.clipboard?.writeText) return;
       await navigator.clipboard.writeText(summary);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);

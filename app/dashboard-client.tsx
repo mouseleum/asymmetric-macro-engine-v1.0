@@ -264,6 +264,15 @@ function parserCoverageText(model: DashboardModel) {
   return `${parsedCount} parsed raw // ${explicitCount} explicit // ${derivedCount} derived // ${coordinateCount} mapped // ${telemetryCount} telemetry-backed`;
 }
 
+function hasVaultContractGap(model: DashboardModel) {
+  return model.diagnostics.opportunities.explicitCount === 0 && model.diagnostics.opportunities.parsedCount === 0;
+}
+
+function vaultContractGapText(model: DashboardModel) {
+  if (!hasVaultContractGap(model)) return "Vault opportunity contract satisfied.";
+  return "Vault contract gap: Finder needs explicit opportunity/report rows or raw report text to produce true alerts.";
+}
+
 function rejectionSummary(result: ResearchResult) {
   if (result.rejectionReasons.length === 0) return `Score ${result.score} did not clear the current pass.`;
   return result.rejectionReasons.slice(0, 4).join(", ");
@@ -1321,6 +1330,11 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
       <div className="border-b border-line/10 bg-bg px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
         Parser coverage: {parserCoverageText(model)}
       </div>
+      {hasVaultContractGap(model) ? (
+        <div className="border-b border-line/10 bg-paper px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
+          {vaultContractGapText(model)}
+        </div>
+      ) : null}
 
       <div className="grid lg:grid-cols-[1fr_360px]">
         <section className="px-5 py-10 md:px-10 md:py-12">

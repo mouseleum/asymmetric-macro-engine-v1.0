@@ -15,8 +15,13 @@ function formatLine(label: string, value: string | number | boolean | undefined)
   return `${label.padEnd(22, " ")} ${value ?? "--"}`;
 }
 
+function hasVaultContractGap(explicitCount: number, parsedCount: number) {
+  return explicitCount === 0 && parsedCount === 0;
+}
+
 export async function GET() {
   const model = await getDashboardModel();
+  const { explicitCount, parsedCount, derivedCount } = model.diagnostics.opportunities;
   const missingSections = [
     model.buildups.length === 0 ? "buildups" : "",
     model.events.length === 0 ? "events" : "",
@@ -35,9 +40,22 @@ export async function GET() {
     formatLine("Series", model.series.length),
     formatLine("Pulse metrics", model.latest.length),
     formatLine("Opportunity mode", model.diagnostics.opportunities.mode),
-    formatLine("Explicit opps", model.diagnostics.opportunities.explicitCount),
-    formatLine("Parsed reports", model.diagnostics.opportunities.parsedCount),
-    formatLine("Derived buildups", model.diagnostics.opportunities.derivedCount),
+    formatLine("Explicit opps", explicitCount),
+    formatLine("Parsed reports", parsedCount),
+    formatLine("Derived buildups", derivedCount),
+    "",
+    "VAULT CONTRACT GAP",
+    hasVaultContractGap(explicitCount, parsedCount)
+      ? "Open: live Vault is returning derived watch rows, not explicit opportunity/report payloads."
+      : "Closed: live Vault is returning explicit opportunities or parseable raw reports.",
+    "",
+    "Finder can produce true opportunity reports when dashboard-feed includes one of:",
+    "- opportunities, buildups, alerts, reports, or setups rows",
+    "- raw report text under rawReport, report, content, text, body, or analysis",
+    "- coordinates or Geospatial Lock: lat, lon for map placement",
+    "- asset basket fields: primaryLong, primaryShort, proxies, hedge",
+    "- catalysts plus downside/invalidation",
+    "- optional raw telemetry and source metadata for grounding",
     "",
     "PARSER COVERAGE",
     ...model.buildups.map((buildup) =>

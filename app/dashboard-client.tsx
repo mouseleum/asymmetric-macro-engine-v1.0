@@ -434,13 +434,15 @@ function CommandBar({
       const keywordMatched = targetFallback
         ? allScored
         : directKeywordMatched;
+      const exploratoryPass = threshold === 0;
       const qualityRejected = keywordMatched.filter((result) => !passesDerivedQualityGate(result.buildup));
       const qualityAccepted = keywordMatched.filter((result) => passesDerivedQualityGate(result.buildup));
-      const results = qualityAccepted
+      const resultCandidates = exploratoryPass ? keywordMatched : qualityAccepted;
+      const results = resultCandidates
         .filter((result) => result.score >= threshold)
         .sort((a, b) => b.score - a.score)
         .slice(0, 8);
-      const thresholdRejected = qualityAccepted.filter((result) => result.score < threshold);
+      const thresholdRejected = resultCandidates.filter((result) => result.score < threshold);
       const keywordRejected = targetFallback ? 0 : buildups.length - keywordMatched.length;
       const topQualityRejected = [...qualityRejected].sort((a, b) => b.score - a.score)[0];
       const topThresholdRejected = thresholdRejected.sort((a, b) => b.score - a.score)[0];
@@ -474,7 +476,7 @@ function CommandBar({
         results,
         scanned: buildups.length,
         rejected: buildups.length - results.length,
-        rejectedByQuality: qualityRejected.length,
+        rejectedByQuality: exploratoryPass ? 0 : qualityRejected.length,
         rejectedByKeyword: keywordRejected,
         rejectedByThreshold: thresholdRejected.length,
         topRejected,

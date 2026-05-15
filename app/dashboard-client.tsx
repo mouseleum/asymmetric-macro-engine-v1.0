@@ -661,6 +661,11 @@ function FactList({ items }: { items: string[] }) {
 
 function OpportunityReport({ buildup, model }: { buildup: Buildup; model: DashboardModel }) {
   const [copied, setCopied] = useState(false);
+  const quality = candidateQuality(buildup);
+  const rejectionReasons = candidateRejectionReasons(buildup, quality);
+  const isExploratoryCandidate = buildup.origin === "derived" && !passesDerivedQualityGate(buildup);
+  const reportKicker = isExploratoryCandidate ? "Exploratory candidate" : "Opportunity identified";
+  const reportTitle = isExploratoryCandidate ? "Candidate Detected" : "Buildup Detected";
 
   async function copyRawSummary() {
     const summary = [
@@ -685,14 +690,18 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
   }
 
   return (
-    <article className="mx-auto max-w-5xl border border-accent bg-paper p-6 shadow-[10px_10px_0_#141414] md:p-10">
+    <article className={cn("mx-auto max-w-5xl border bg-paper p-6 shadow-[10px_10px_0_#141414] md:p-10", isExploratoryCandidate ? "border-line" : "border-accent")}>
       <header className="border-b border-line/10 pb-8">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-4">
-            <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-accent" aria-hidden="true" />
+            {isExploratoryCandidate ? (
+              <AlertTriangle className="mt-1 h-7 w-7 shrink-0 text-muted" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-accent" aria-hidden="true" />
+            )}
             <div>
               <h2 className="text-2xl font-extrabold uppercase leading-tight md:text-3xl">{buildup.label}</h2>
-              <p className="mt-2 font-mono text-xs uppercase text-muted">Opportunity identified</p>
+              <p className="mt-2 font-mono text-xs uppercase text-muted">{reportKicker}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] uppercase text-muted">
@@ -712,6 +721,22 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
             ) : null}
           </div>
         </div>
+        {isExploratoryCandidate ? (
+          <div className="mt-8 border border-line/10 bg-bg/60 p-4">
+            <p className="font-mono text-[11px] font-bold uppercase text-muted">Why not an alert yet</p>
+            <p className="mt-3 text-sm leading-relaxed text-ink/70">
+              This is a derived Vault watch item surfaced for exploration. It needs a more explicit opportunity payload, stronger
+              structure, or cleaner evidence before Finder should present it as a high-conviction alert.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 font-mono text-[10px] uppercase text-muted">
+              {(rejectionReasons.length > 0 ? rejectionReasons : ["watch-grade source"]).slice(0, 5).map((reason) => (
+                <span key={reason} className="border border-line/10 bg-paper px-2 py-1">
+                  {reason}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <div className="mt-8">
@@ -746,7 +771,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
       </div>
 
       <section id="buildup" className="mt-10 scroll-mt-6">
-        <h3 className="text-2xl font-medium uppercase text-ink/75">Buildup Detected</h3>
+        <h3 className="text-2xl font-medium uppercase text-ink/75">{reportTitle}</h3>
         <p className="mt-6 max-w-3xl text-xl leading-relaxed text-ink/75">{buildup.situation}</p>
 
         <div className="mt-8 grid gap-6 border-y border-line/10 py-6 md:grid-cols-3">

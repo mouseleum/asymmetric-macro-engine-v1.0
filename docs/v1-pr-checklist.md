@@ -23,7 +23,7 @@ Use this before merging the Macro Finder V1 dashboard branch.
 - Set `Alert Threshold` to `0`, run research, and confirm `Exploratory candidate`.
 - Click `Parser Demo` and confirm `Opportunity identified`.
 - Open `Vault Signal Inspector` and then `Raw Vault Payload Preview`.
-- Open `/diagnostics` and confirm contract gap plus recommended `dashboard-feed` shape.
+- Open `/diagnostics` and confirm endpoint-shape inspector, opportunity readiness, contract gap, and recommended `dashboard-feed` shape.
 
 ## Verification
 

@@ -23,13 +23,18 @@ function latestSeriesConfig() {
   };
 }
 
-function countPayloadItems(payload: unknown) {
+function countPayloadItems(payload: unknown): number | undefined {
   if (Array.isArray(payload)) return payload.length;
   if (typeof payload !== "object" || payload === null) return undefined;
   const record = payload as Record<string, unknown>;
 
-  for (const key of ["buildups", "opportunities", "alerts", "reports", "setups", "risks", "items", "feed", "data", "signals", "upcomingCriticalEvents", "events", "series", "metrics", "latest"]) {
+  for (const key of ["buildups", "opportunities", "alerts", "reports", "setups", "risks", "items", "rows", "feed", "data", "signals", "upcomingCriticalEvents", "events", "series", "metrics", "latest"]) {
     if (Array.isArray(record[key])) return record[key].length;
+  }
+
+  for (const key of ["data", "payload", "result", "results", "dashboardFeed", "dashboard_feed", "feed"]) {
+    const count: number | undefined = countPayloadItems(record[key]);
+    if (count !== undefined) return count;
   }
 
   if ("observation" in record) return 1;
@@ -107,6 +112,7 @@ export async function getDashboardModel(): Promise<DashboardModel> {
         message: "Using local fixture payload.",
         itemCount: countPayloadItems(mockVaultPayloads[endpoint]),
       })),
+      endpointShapes: [],
       latestSeries: latestSeriesConfig(),
       opportunities: {
         mode: "derived",
@@ -114,6 +120,7 @@ export async function getDashboardModel(): Promise<DashboardModel> {
         parsedCount: 0,
         derivedCount: 0,
       },
+      opportunityReadiness: [],
     };
 
     return normalizeDashboardModel(
@@ -160,6 +167,7 @@ export async function getDashboardModel(): Promise<DashboardModel> {
 
   return normalizeDashboardModel(payloads, errors, "live", {
     endpoints: diagnosticEndpoints,
+    endpointShapes: [],
     latestSeries: latestSeriesConfig(),
     opportunities: {
       mode: "derived",
@@ -167,5 +175,6 @@ export async function getDashboardModel(): Promise<DashboardModel> {
       parsedCount: 0,
       derivedCount: 0,
     },
+    opportunityReadiness: [],
   });
 }

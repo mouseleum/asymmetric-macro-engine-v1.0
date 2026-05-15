@@ -39,6 +39,81 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+const commonArrayKeys = [
+  "buildups",
+  "opportunities",
+  "alerts",
+  "reports",
+  "setups",
+  "risks",
+  "items",
+  "rows",
+  "feed",
+  "data",
+  "signals",
+  "upcomingCriticalEvents",
+  "events",
+  "series",
+  "metrics",
+  "latest",
+];
+
+const commonWrapperKeys = [
+  "data",
+  "payload",
+  "result",
+  "results",
+  "dashboardFeed",
+  "dashboard_feed",
+  "feed",
+  "response",
+];
+
+const reportTextKeys = [
+  "rawReport",
+  "raw_report",
+  "report",
+  "content",
+  "text",
+  "body",
+  "analysis",
+  "rawAnalysis",
+  "raw_analysis",
+  "fullReport",
+  "full_report",
+  "markdown",
+  "summaryText",
+  "summary_text",
+];
+
+function nestedValue(source: unknown, path: string[]) {
+  let current = source;
+  for (const part of path) {
+    if (!isRecord(current)) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function findArrayAtPath(payload: unknown, keys: string[], prefix: string[] = []): { rows: unknown[]; path: string } | undefined {
+  if (Array.isArray(payload)) return { rows: payload, path: prefix.join(".") || "$" };
+  if (!isRecord(payload)) return undefined;
+
+  for (const key of keys) {
+    const candidate = payload[key];
+    if (Array.isArray(candidate)) return { rows: candidate, path: [...prefix, key].join(".") };
+  }
+
+  for (const wrapperKey of commonWrapperKeys) {
+    const wrapped: unknown = payload[wrapperKey];
+    if (wrapped === payload) continue;
+    const found = findArrayAtPath(wrapped, keys, [...prefix, wrapperKey]);
+    if (found) return found;
+  }
+
+  return undefined;
+}
+
 function asStringArray(value: unknown, fallback: string[] = []) {
   if (Array.isArray(value)) {
     return value
@@ -98,12 +173,26 @@ function buildRawPreview(value: unknown) {
 }
 
 function normalizeSources(value: unknown): Buildup["sources"] {
-  return asArray(value)
+  const rows = Array.isArray(value) ? value : isRecord(value) ? [value] : [];
+  return rows
     .filter(isRecord)
     .map((source, sourceIndex) => ({
       title: asString(source.title ?? source.name ?? source.source_title, `Source ${sourceIndex + 1}`),
       url: asString(source.url ?? source.href ?? source.source_url, "https://macro-vault-v3.vercel.app"),
     }));
+}
+
+function normalizeRecordSources(raw: AnyRecord) {
+  return normalizeSources([
+    ...asArray(raw.sources),
+    ...asArray(raw.sourceLinks ?? raw.source_links),
+    ...asArray(raw.references),
+    isRecord(raw.source) ? raw.source : undefined,
+    raw.source_url ? { title: raw.source_title ?? raw.source_name ?? "Macro Vault source", url: raw.source_url } : undefined,
+    isRecord(raw.metadata) && raw.metadata.source_url
+      ? { title: raw.metadata.source_title ?? "Macro Vault source", url: raw.metadata.source_url }
+      : undefined,
+  ].filter(Boolean));
 }
 
 function asImpact(value: unknown): MacroEvent["impact"] {
@@ -117,13 +206,7 @@ function asImpact(value: unknown): MacroEvent["impact"] {
 }
 
 function getFirstArray(payload: unknown, keys: string[]) {
-  if (Array.isArray(payload)) return payload;
-  if (!isRecord(payload)) return [];
-  for (const key of keys) {
-    const candidate = payload[key];
-    if (Array.isArray(candidate)) return candidate;
-  }
-  return [];
+  return findArrayAtPath(payload, keys)?.rows ?? [];
 }
 
 function normalizeRegime(payload: unknown): RegimeSummary {
@@ -212,10 +295,7 @@ function normalizeLatest(payload: unknown, riskItems: RiskItem[], events: MacroE
 function normalizeRiskItems(payload: unknown): RiskItem[] {
   const rows = getFirstArray(payload, ["risks", "items", "feed", "data", "signals", "upcomingCriticalEvents", "events"]);
   return rows.filter(isRecord).map((item, index): RiskItem => {
-    const sourceFromEvent = item.source_url
-      ? [{ title: asString(item.source_title, "Macro Vault source"), url: asString(item.source_url) }]
-      : [];
-    const sources = normalizeSources([...asArray(item.sources), ...sourceFromEvent]);
+    const sources = normalizeRecordSources(item);
     const impactScore = asNumber(item.impact_score ?? (isRecord(item.metadata) ? item.metadata.impact_score : undefined), 50);
     const confidence = asNumber(item.confidence, 0.5);
     const eventDate = asString(item.event_date ?? item.date);
@@ -409,14 +489,37 @@ function buildUltraDeepAnalysis(item: RiskItem, assetBasket: Buildup["assetBaske
 }
 
 function normalizeCoordinates(value: unknown): Buildup["coordinates"] {
+  if (typeof value === "string") {
+    const match = value.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (!match) return undefined;
+    return {
+      lat: Number(match[1]),
+      lon: Number(match[2]),
+    };
+  }
+
+  if (Array.isArray(value)) {
+    const lat = asNumber(value[0], Number.NaN);
+    const lon = asNumber(value[1], Number.NaN);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return undefined;
+    return { lat, lon };
+  }
+
   if (!isRecord(value)) return undefined;
+  const nestedCoordinates = normalizeCoordinates(value.coordinates ?? value.coordinate ?? value.geospatialLock ?? value.geospatial_lock);
+  if (nestedCoordinates) {
+    return {
+      ...nestedCoordinates,
+      label: asString(value.label ?? value.name ?? value.place, nestedCoordinates.label),
+    };
+  }
   const lat = asNumber(value.lat ?? value.latitude, Number.NaN);
   const lon = asNumber(value.lon ?? value.lng ?? value.longitude, Number.NaN);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return undefined;
   return {
     lat,
     lon,
-    label: asString(value.label ?? value.name),
+    label: asString(value.label ?? value.name ?? value.place),
   };
 }
 
@@ -524,8 +627,35 @@ const reportSectionNames = [
   "INVALIDATION TRIGGERS",
 ];
 
-function getRawReport(raw: AnyRecord) {
-  return asString(raw.rawReport ?? raw.raw_report ?? raw.report ?? raw.content ?? raw.text ?? raw.body ?? raw.analysis);
+function getRawReport(raw: AnyRecord): string {
+  for (const key of reportTextKeys) {
+    const value = raw[key];
+    const text = asString(value);
+    if (text) return text;
+  }
+
+  const nestedPaths = [
+    ["metadata"],
+    ["meta"],
+    ["details"],
+    ["payload"],
+    ["data"],
+    ["ai"],
+    ["gemini"],
+    ["analysis"],
+    ["report"],
+  ];
+
+  for (const path of nestedPaths) {
+    const candidate = nestedValue(raw, path);
+    if (typeof candidate === "string") return candidate;
+    if (isRecord(candidate)) {
+      const nested: string = getRawReport(candidate);
+      if (nested) return nested;
+    }
+  }
+
+  return "";
 }
 
 function cleanReportText(value: string) {
@@ -686,7 +816,7 @@ function parseRawReport(value: string): ParsedReport | undefined {
 function riskItemFromOpportunity(raw: AnyRecord, index: number, parsed?: ParsedReport): RiskItem {
   const divergence = Math.max(0, Math.min(100, asNumber(raw.divergenceScore ?? raw.divergence_score ?? raw.divergenceMeter ?? raw.divergence_meter ?? raw.divergence, parsed?.divergenceScore ?? 50)));
   const conviction = Math.max(0, Math.min(100, asNumber(raw.conviction ?? raw.convictionScore ?? raw.conviction_score ?? raw.score, parsed?.conviction ?? divergence)));
-  const sources = normalizeSources(raw.sources);
+  const sources = normalizeRecordSources(raw);
   return {
     id: asString(raw.id, `opportunity-${index}`),
     title: asString(raw.label ?? raw.title ?? raw.name, parsed?.label ?? `Opportunity ${index + 1}`),
@@ -703,8 +833,36 @@ function riskItemFromOpportunity(raw: AnyRecord, index: number, parsed?: ParsedR
   };
 }
 
+function isOpportunityLike(raw: AnyRecord) {
+  return Boolean(
+    getRawReport(raw) ||
+      raw.assetBasket ||
+      raw.asset_basket ||
+      raw.coordinates ||
+      raw.coordinate ||
+      raw.location ||
+      raw.binaryEvent ||
+      raw.binary_event ||
+      raw.binaryTrigger ||
+      raw.binary_trigger ||
+      raw.opportunity === true ||
+      raw.kind === "opportunity" ||
+      raw.type === "opportunity" ||
+      raw.status === "opportunity",
+  );
+}
+
+function getOpportunityRows(payload: unknown) {
+  const explicit = findArrayAtPath(payload, ["buildups", "opportunities", "alerts", "reports", "setups"]);
+  if (explicit) return explicit.rows;
+
+  const loose = findArrayAtPath(payload, ["rows", "items", "data"]);
+  if (!loose) return [];
+  return loose.rows.filter((row) => isRecord(row) && isOpportunityLike(row));
+}
+
 function normalizeExplicitBuildups(payload: unknown, regime: RegimeSummary, series: SeriesItem[]): Buildup[] {
-  const rows = getFirstArray(payload, ["buildups", "opportunities", "alerts", "reports", "setups"]);
+  const rows = getOpportunityRows(payload);
   return rows.filter(isRecord).map((raw, index): Buildup => {
     const parsed = parseRawReport(getRawReport(raw));
     const item = riskItemFromOpportunity(raw, index, parsed);
@@ -723,7 +881,7 @@ function normalizeExplicitBuildups(payload: unknown, regime: RegimeSummary, seri
       origin: parsed ? "parsed" : "explicit",
       label: item.title,
       situation: item.summary,
-      coordinates: normalizeCoordinates(raw.coordinates ?? raw.coordinate ?? raw.location) ?? parsed?.coordinates,
+      coordinates: normalizeCoordinates(raw.coordinates ?? raw.coordinate ?? raw.location ?? raw.geospatialLock ?? raw.geospatial_lock) ?? parsed?.coordinates,
       observableFacts: asStringArray(raw.observableFacts ?? raw.observable_facts ?? raw.facts, parsed?.observableFacts ?? buildObservableFacts(item, regime)),
       timeline,
       groundTruth: asString(raw.groundTruth ?? raw.ground_truth, `${item.status} signal held in Macro Vault with ${item.conviction}/100 confidence.`),
@@ -824,7 +982,7 @@ function normalizeBuildups(payload: unknown, riskItems: RiskItem[], regime: Regi
 }
 
 function countExplicitOpportunities(payload: unknown) {
-  return getFirstArray(payload, ["buildups", "opportunities", "alerts", "reports", "setups"]).filter(isRecord).length;
+  return getOpportunityRows(payload).filter(isRecord).length;
 }
 
 function deriveGeneratedAt(payloads: VaultPayloads) {
@@ -836,6 +994,113 @@ function deriveGeneratedAt(payloads: VaultPayloads) {
     }
   }
   return new Date().toISOString();
+}
+
+function payloadRootKind(payload: unknown): DashboardDiagnostics["endpointShapes"][number]["rootKind"] {
+  if (Array.isArray(payload)) return "array";
+  if (isRecord(payload)) return "object";
+  if (payload === undefined || payload === null) return "empty";
+  return "other";
+}
+
+function arrayFieldPaths(value: unknown, prefix: string[] = [], depth = 0): string[] {
+  if (!isRecord(value) || depth > 2) return [];
+  const paths: string[] = [];
+
+  for (const [key, child] of Object.entries(value)) {
+    const path = [...prefix, key];
+    if (Array.isArray(child)) paths.push(path.join("."));
+    if (isRecord(child)) paths.push(...arrayFieldPaths(child, path, depth + 1));
+  }
+
+  return paths;
+}
+
+function rawReportFieldPaths(value: unknown, prefix: string[] = [], depth = 0): string[] {
+  if (!isRecord(value) || depth > 3) return [];
+  const paths: string[] = [];
+
+  for (const [key, child] of Object.entries(value)) {
+    const path = [...prefix, key];
+    if (reportTextKeys.includes(key) && typeof child === "string" && child.trim().length > 0) {
+      paths.push(path.join("."));
+    }
+    if (isRecord(child)) paths.push(...rawReportFieldPaths(child, path, depth + 1));
+  }
+
+  return paths;
+}
+
+function buildEndpointShapeDiagnostics(payloads: VaultPayloads): DashboardDiagnostics["endpointShapes"] {
+  return endpoints.map((endpoint) => {
+    const payload = payloads[endpoint];
+    const payloadRecord = isRecord(payload) ? payload : undefined;
+    const topLevelFields = payloadRecord ? Object.keys(payloadRecord).sort() : [];
+    const arrayFields = payloadRecord ? topLevelFields.filter((key) => Array.isArray(payloadRecord[key])) : [];
+    const nestedArrayFields = arrayFieldPaths(payload)
+      .filter((path) => !arrayFields.includes(path))
+      .sort();
+    const itemPath = findArrayAtPath(payload, commonArrayKeys);
+    const rows = itemPath?.rows.filter(isRecord) ?? [];
+    const rawReportFields = [
+      ...rawReportFieldPaths(payload),
+      ...rows.flatMap((row) => rawReportFieldPaths(row)),
+    ]
+      .filter((path, index, allPaths) => allPaths.indexOf(path) === index)
+      .sort();
+
+    return {
+      endpoint,
+      rootKind: payloadRootKind(payload),
+      topLevelFields,
+      arrayFields,
+      nestedArrayFields,
+      rawReportFields,
+      itemCount: itemPath?.rows.length,
+    };
+  });
+}
+
+function hasGenericAssetBasket(buildup: Buildup) {
+  return [
+    "macro-sensitive beneficiary basket",
+    "complacent risk beta",
+    "position-size and event-risk hedge",
+    "quality defensives",
+    "cyclical growth beta",
+  ].some((phrase) =>
+    [
+      buildup.assetBasket.primaryLong,
+      buildup.assetBasket.primaryShort,
+      buildup.assetBasket.hedge,
+      ...buildup.assetBasket.proxies,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(phrase),
+  );
+}
+
+function buildOpportunityReadinessDiagnostics(buildups: Buildup[]): DashboardDiagnostics["opportunityReadiness"] {
+  return buildups.map((buildup) => {
+    const missingFields = [
+      buildup.origin === "derived" ? "explicit opportunity/raw report" : "",
+      !buildup.coordinates ? "coordinates" : "",
+      hasGenericAssetBasket(buildup) ? "non-generic asset basket" : "",
+      buildup.catalysts.length === 0 ? "catalysts" : "",
+      buildup.invalidation.length < 20 ? "invalidation/downside" : "",
+      buildup.rawTelemetry.length === 0 ? "raw telemetry" : "",
+      buildup.sources.length === 0 ? "source metadata" : "",
+      !buildup.binaryEvent || buildup.binaryEvent.length < 12 ? "binary event" : "",
+    ].filter(Boolean);
+
+    return {
+      id: buildup.id,
+      label: buildup.label,
+      origin: buildup.origin,
+      missingFields,
+    };
+  });
 }
 
 export function normalizeDashboardModel(
@@ -856,6 +1121,7 @@ export function normalizeDashboardModel(
   const derivedCount = buildups.filter((buildup) => buildup.origin === "derived").length;
   const normalizedDiagnostics: DashboardDiagnostics = {
     endpoints: diagnostics?.endpoints ?? [],
+    endpointShapes: buildEndpointShapeDiagnostics(payloads),
     latestSeries: diagnostics?.latestSeries ?? {
       provider: "alternative_me",
       code: "ALT_FNG",
@@ -867,6 +1133,7 @@ export function normalizeDashboardModel(
       parsedCount,
       derivedCount: explicitOpportunityCount > 0 ? derivedCount : riskItems.length,
     },
+    opportunityReadiness: buildOpportunityReadinessDiagnostics(buildups),
   };
 
   return {

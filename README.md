@@ -27,7 +27,7 @@ Diagnostics are available at:
 
 `/diagnostics`
 
-The diagnostics page shows endpoint status, parser coverage, current Vault contract gaps, and the recommended `dashboard-feed` opportunity shape.
+The diagnostics page shows endpoint status, endpoint-shape inspection, parser coverage, readiness gaps for each buildup, current Vault contract gaps, and the recommended `dashboard-feed` opportunity shape.
 
 Local dev note: running `npm run build` while `next dev` is active can leave this Next.js dev server in a stale Webpack/runtime state. If the preview shows a black overlay, unformatted page, or stale runtime behavior after a build, restart `npm run dev`.
 

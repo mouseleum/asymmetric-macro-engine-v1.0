@@ -2,15 +2,6 @@ import { getDashboardModel } from "@/lib/macro-vault/client";
 
 export const dynamic = "force-dynamic";
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function formatLine(label: string, value: string | number | boolean | undefined) {
   return `${label.padEnd(22, " ")} ${value ?? "--"}`;
 }
@@ -98,6 +89,28 @@ export async function GET() {
     "- catalysts plus downside/invalidation",
     "- optional raw telemetry and source metadata for grounding",
     "",
+    "ENDPOINT SHAPE INSPECTOR",
+    ...model.diagnostics.endpointShapes.flatMap((shape) => [
+      shape.endpoint.toUpperCase(),
+      formatLine("  Root", shape.rootKind),
+      formatLine("  Items", shape.itemCount),
+      formatLine("  Top fields", shape.topLevelFields.slice(0, 16).join(", ") || "--"),
+      formatLine("  Array fields", shape.arrayFields.join(", ") || "--"),
+      formatLine("  Nested arrays", shape.nestedArrayFields.slice(0, 12).join(", ") || "--"),
+      formatLine("  Raw report paths", shape.rawReportFields.slice(0, 12).join(", ") || "--"),
+    ]),
+    "",
+    "OPPORTUNITY READINESS",
+    ...model.diagnostics.opportunityReadiness.map((item) =>
+      [
+        item.id.padEnd(26, " "),
+        item.origin.toUpperCase().padEnd(8, " "),
+        item.missingFields.length === 0 ? "ready" : `missing=${item.missingFields.join(", ")}`,
+        item.label,
+      ].join("  "),
+    ),
+    model.diagnostics.opportunityReadiness.length === 0 ? "No buildup candidates available." : "",
+    "",
     "RECOMMENDED DASHBOARD-FEED SHAPE",
     JSON.stringify(recommendedDashboardFeedShape, null, 2),
     "",
@@ -143,11 +156,10 @@ export async function GET() {
   ];
 
   const text = lines.join("\n");
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Vault Diagnostics</title><style>html,body{margin:0;background:#fff;color:#111;}a{display:inline-block;margin:16px 16px 0;color:#111;font:700 12px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;text-transform:uppercase;}pre{margin:0;padding:16px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:pre-wrap;}</style></head><body><a href="/">Back to dashboard</a><pre>${escapeHtml(text)}</pre></body></html>`;
 
-  return new Response(html, {
+  return new Response(text, {
     headers: {
-      "Content-Type": "text/html; charset=utf-8",
+      "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
     },
   });

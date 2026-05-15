@@ -130,3 +130,104 @@ test("still derives watch buildups when no explicit opportunities exist", () => 
   assert.ok(model.buildups.every((item) => item.origin === "derived"));
   assert.ok(model.buildups.every((item) => item.rawPreview.includes(item.label)));
 });
+
+test("parses raw reports from nested dashboard-feed rows", () => {
+  const payloads = cloneFixture();
+  payloads["dashboard-feed"] = {
+    dashboardFeed: {
+      rows: [
+        {
+          id: "nested-row-report",
+          metadata: {
+            analysis: `[LABEL: Nested Hormuz Watch]
+[COORDINATES: 26.56, 56.25]
+
+BUILDUP DETECTED
+Situation: Raw text buried in metadata still describes a clear chokepoint buildup.
+
+ASSET CORRELATION BASKET:
+PRIMARY LONG: Brent volatility
+PRIMARY SHORT: European importers
+CORRELATED PROXIES: TTF gas, freight rates
+HEDGE/SECONDARY: USD cash
+
+DIVERGENCE METER: 82/100`,
+            source_url: "https://macro-vault-v3.vercel.app/nested-report",
+            source_title: "Nested report source",
+          },
+          coordinates: "bad coordinate value",
+        },
+      ],
+    },
+  };
+
+  const model = normalizeDashboardModel(payloads, [], "mock");
+  const [buildup] = model.buildups;
+  const dashboardFeedShape = model.diagnostics.endpointShapes.find((shape) => shape.endpoint === "dashboard-feed");
+
+  assert.equal(buildup.origin, "parsed");
+  assert.equal(buildup.label, "Nested Hormuz Watch");
+  assert.equal(buildup.coordinates?.lat, 26.56);
+  assert.equal(buildup.coordinates?.lon, 56.25);
+  assert.equal(buildup.assetBasket.primaryLong, "Brent volatility");
+  assert.equal(buildup.sources[0]?.url, "https://macro-vault-v3.vercel.app/nested-report");
+  assert.ok(dashboardFeedShape?.nestedArrayFields.includes("dashboardFeed.rows"));
+  assert.ok(dashboardFeedShape?.rawReportFields.includes("metadata.analysis"));
+});
+
+test("nested generic data items stay derived instead of promoted to alerts", () => {
+  const payloads = cloneFixture();
+  payloads["dashboard-feed"] = {
+    data: {
+      items: [
+        {
+          id: "nested-watch-row",
+          title: "Nested Inflation Watch",
+          summary: "A nested row has macro pressure, but no explicit opportunity report.",
+          severity: "high",
+          conviction: 82,
+          divergence_score: 78,
+          metadata: {
+            source_url: "https://macro-vault-v3.vercel.app/watch-row",
+            source_title: "Watch row source",
+          },
+        },
+      ],
+    },
+  };
+
+  const model = normalizeDashboardModel(payloads, [], "mock");
+  const [buildup] = model.buildups;
+
+  assert.equal(buildup.origin, "derived");
+  assert.equal(buildup.label, "Nested Inflation Watch");
+  assert.equal(buildup.sources[0]?.title, "Watch row source");
+  assert.equal(model.diagnostics.opportunities.mode, "derived");
+  assert.equal(model.diagnostics.opportunityReadiness[0].missingFields.includes("explicit opportunity/raw report"), true);
+});
+
+test("malformed explicit coordinates fall back without crashing", () => {
+  const payloads = cloneFixture();
+  payloads["dashboard-feed"] = {
+    opportunities: [
+      {
+        id: "bad-coordinates",
+        label: "Bad Coordinate Report",
+        situation: "Structured payload supplies unusable coordinates but remains renderable.",
+        coordinates: { lat: "north", lon: "east" },
+        assetBasket: {
+          primaryLong: "Oil volatility",
+          primaryShort: "Transport equities",
+          proxies: ["Freight"],
+          hedge: "Cash",
+        },
+      },
+    ],
+  };
+
+  const [buildup] = normalizeDashboardModel(payloads, [], "mock").buildups;
+
+  assert.equal(buildup.origin, "explicit");
+  assert.equal(buildup.coordinates, undefined);
+  assert.equal(buildup.assetBasket.primaryShort, "Transport equities");
+});

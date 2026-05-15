@@ -159,8 +159,26 @@ export interface EndpointDiagnostic {
   itemCount?: number;
 }
 
+export interface EndpointShapeDiagnostic {
+  endpoint: VaultEndpoint;
+  rootKind: "array" | "object" | "empty" | "other";
+  topLevelFields: string[];
+  arrayFields: string[];
+  nestedArrayFields: string[];
+  rawReportFields: string[];
+  itemCount?: number;
+}
+
+export interface OpportunityReadinessDiagnostic {
+  id: string;
+  label: string;
+  origin: Buildup["origin"];
+  missingFields: string[];
+}
+
 export interface DashboardDiagnostics {
   endpoints: EndpointDiagnostic[];
+  endpointShapes: EndpointShapeDiagnostic[];
   latestSeries: {
     provider: string;
     code: string;
@@ -172,6 +190,7 @@ export interface DashboardDiagnostics {
     parsedCount: number;
     derivedCount: number;
   };
+  opportunityReadiness: OpportunityReadinessDiagnostic[];
 }
 
 export interface DashboardModel {

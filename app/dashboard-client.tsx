@@ -94,6 +94,11 @@ function vaultContractGapText(model: DashboardModel) {
   return "Vault contract gap: Finder needs explicit opportunity/report rows or raw report text to produce true alerts.";
 }
 
+function vaultContractStatusLabel(model: DashboardModel) {
+  if (!hasVaultContractGap(model)) return "True opportunity feed";
+  return model.freshness.mode === "live" ? "Live feed: watch-grade only" : "Mock feed: fixture/watch-grade";
+}
+
 function originLabel(buildup: Buildup) {
   return {
     explicit: "Vault explicit",
@@ -188,6 +193,51 @@ function StatusBanner({ model }: { model: DashboardModel }) {
         </span>
       </div>
     </div>
+  );
+}
+
+function VaultContractStatus({ model, feedStatus }: { model: DashboardModel; feedStatus: string }) {
+  const { explicitCount, parsedCount, derivedCount } = model.diagnostics.opportunities;
+  const contractGap = hasVaultContractGap(model);
+
+  return (
+    <section className="border-b border-line/10 bg-paper px-5 py-4 md:px-10" aria-label="Vault contract status">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <span
+              className={cn(
+                "inline-flex items-center gap-2 border px-3 py-2 font-mono text-[10px] font-bold uppercase",
+                contractGap
+                  ? "border-accent/30 bg-accent/5 text-accent"
+                  : "border-good/30 bg-good/5 text-good",
+              )}
+            >
+              <Database className="h-3.5 w-3.5" aria-hidden="true" />
+              {vaultContractStatusLabel(model)}
+            </span>
+            <span className="font-mono text-[11px] uppercase text-muted">
+              {explicitCount} explicit / {parsedCount} parsed / {derivedCount} derived
+            </span>
+          </div>
+          <p className="mt-3 max-w-4xl font-mono text-[11px] uppercase leading-relaxed text-muted">
+            {contractGap
+              ? "True alerts require explicit opportunities or raw old-engine reports from Macro Vault. Current rows are interpreted as watch-grade signals."
+              : "Macro Vault is supplying reportable opportunity payloads. Finder can render true alert reports from the live contract."}
+          </p>
+          <p className="mt-2 max-w-4xl font-mono text-[11px] uppercase leading-relaxed text-muted/75">
+            {feedStatus}
+          </p>
+        </div>
+        <a
+          href="/diagnostics"
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 border border-line/20 bg-bg px-4 font-mono text-[11px] font-bold uppercase text-ink hover:border-accent hover:text-accent"
+        >
+          Diagnostics
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+        </a>
+      </div>
+    </section>
   );
 }
 
@@ -1078,17 +1128,13 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
         />
       </div>
       <StatusBanner model={model} />
-      <div className="border-b border-line/10 bg-paper px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
-        Vault feed status: {feedStatus}
-      </div>
+      <VaultContractStatus model={model} feedStatus={feedStatus} />
       <div className="border-b border-line/10 bg-bg px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
         Parser coverage: {parserCoverageText(model)}
       </div>
-      {hasVaultContractGap(model) ? (
-        <div className="border-b border-line/10 bg-paper px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
-          {vaultContractGapText(model)}
-        </div>
-      ) : null}
+      <div className="border-b border-line/10 bg-paper px-5 py-3 font-mono text-[11px] uppercase text-muted md:px-10">
+        {vaultContractGapText(model)}
+      </div>
 
       <div className="grid lg:grid-cols-[1fr_360px]">
         <section className="px-5 py-10 md:px-10 md:py-12">

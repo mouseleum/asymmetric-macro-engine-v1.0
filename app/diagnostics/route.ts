@@ -2,6 +2,15 @@ import { getDashboardModel } from "@/lib/macro-vault/client";
 
 export const dynamic = "force-dynamic";
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function formatLine(label: string, value: string | number | boolean | undefined) {
   return `${label.padEnd(22, " ")} ${value ?? "--"}`;
 }
@@ -156,10 +165,11 @@ export async function GET() {
   ];
 
   const text = lines.join("\n");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Vault Diagnostics</title><style>html,body{margin:0;background:#fff;color:#111;}pre{margin:0;padding:16px;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;white-space:pre-wrap;}</style></head><body><pre>${escapeHtml(text)}</pre></body></html>`;
 
-  return new Response(text, {
+  return new Response(html, {
     headers: {
-      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
     },
   });

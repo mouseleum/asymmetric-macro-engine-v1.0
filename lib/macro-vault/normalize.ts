@@ -687,6 +687,14 @@ function scoreFromText(value: string | undefined) {
   return Math.max(0, Math.min(100, Number(match[1])));
 }
 
+function scoreComponentFromText(value: string | undefined, label: string, max = 25) {
+  if (!value) return undefined;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = value.match(new RegExp(`${escaped}\\s*:?\\s*(\\d{1,3})(?:\\s*\\/\\s*${max})?`, "i"));
+  if (!match) return undefined;
+  return Math.max(0, Math.min(max, Number(match[1])));
+}
+
 function extractBracketValue(report: string, label: string) {
   const match = report.match(new RegExp(`\\[${label}\\s*:\\s*([^\\]]+)\\]`, "i"));
   return match?.[1]?.trim();
@@ -773,6 +781,35 @@ function normalizeParsedUltraDeep(value: ParsedReport["ultraDeepAnalysis"], fall
   };
 }
 
+function parseScoreBreakdown(report: string): ParsedReport["scoreBreakdown"] | undefined {
+  const section = extractSection(report, ["SCORE"]);
+  if (!section) return undefined;
+  const total = scoreComponentFromText(section, "TOTAL", 100) ?? scoreFromText(section);
+  const scoreBreakdown = {
+    visibility: scoreComponentFromText(section, "Visibility"),
+    escalation: scoreComponentFromText(section, "Escalation"),
+    mispricing: scoreComponentFromText(section, "Mispricing"),
+    directness: scoreComponentFromText(section, "Directness"),
+    total,
+  };
+
+  return Object.values(scoreBreakdown).some((value) => value !== undefined) ? scoreBreakdown : undefined;
+}
+
+function mergeParsedScoreBreakdown(
+  parsed: ParsedReport["scoreBreakdown"],
+  fallback: Buildup["scoreBreakdown"],
+): Buildup["scoreBreakdown"] {
+  if (!parsed) return fallback;
+  return {
+    visibility: parsed.visibility ?? fallback.visibility,
+    escalation: parsed.escalation ?? fallback.escalation,
+    mispricing: parsed.mispricing ?? fallback.mispricing,
+    directness: parsed.directness ?? fallback.directness,
+    total: parsed.total ?? fallback.total,
+  };
+}
+
 function parseRawReport(value: string): ParsedReport | undefined {
   const report = cleanReportText(value);
   if (!report) return undefined;
@@ -780,7 +817,8 @@ function parseRawReport(value: string): ParsedReport | undefined {
   const buildupSection = extractSection(report, ["BUILDUP DETECTED"]);
   const situation = extractInlineField(report, "Situation") ?? splitReportLines(buildupSection ?? "")[0];
   const divergenceScore = scoreFromText(report.match(/DIVERGENCE METER[\s\S]*?(?=\n|$)/i)?.[0] ?? report);
-  const totalScore = scoreFromText(extractSection(report, ["SCORE"]) ?? report);
+  const scoreBreakdown = parseScoreBreakdown(report);
+  const totalScore = scoreBreakdown?.total ?? scoreFromText(extractSection(report, ["SCORE"]) ?? report);
   const observableFacts = splitReportLines(extractSection(report, ["OBSERVABLE FACTS"]) ?? "").slice(0, 8);
   const timelineText = extractSection(report, ["TIMELINE"]);
   const rawTelemetry = splitReportLines(extractSection(report, ["RAW TELEMETRY DATA"]) ?? "");
@@ -802,7 +840,7 @@ function parseRawReport(value: string): ParsedReport | undefined {
     rawTelemetry: rawTelemetry.length > 0 ? rawTelemetry : undefined,
     divergenceScore,
     conviction: totalScore ?? divergenceScore,
-    scoreBreakdown: totalScore ? { total: totalScore } : undefined,
+    scoreBreakdown,
     ultraDeepAnalysis: {
       tradeStructuring: parseUltraDeepSection(report, ["TRADE STRUCTURING & PROXIES", "TRADE STRUCTURING"]),
       redTeam: parseUltraDeepSection(report, ["RED TEAMING", "RED TEAMING (DEVIL'S ADVOCATE)"]),
@@ -873,8 +911,11 @@ function normalizeExplicitBuildups(payload: unknown, regime: RegimeSummary, seri
     const parsedUltraDeep = normalizeParsedUltraDeep(parsed?.ultraDeepAnalysis, fallbackUltraDeep);
     const binaryEvent = asString(raw.binaryEvent ?? raw.binary_event ?? raw.trigger ?? raw.binaryTrigger ?? raw.binary_trigger, parsed?.binaryEvent ?? item.catalysts[0] ?? "A catalyst confirms or invalidates the setup.");
     const timeline = asStringArray(raw.timeline, parsed?.timeline ?? buildTimeline(item, regime));
-    const scoreBreakdown = normalizeScoreBreakdown(raw.scoreBreakdown ?? raw.score_breakdown ?? raw.score, item);
-    const parsedScoreTotal = parsed?.scoreBreakdown?.total;
+    const rawScoreInput = raw.scoreBreakdown ?? raw.score_breakdown ?? raw.score;
+    const normalizedScoreBreakdown = normalizeScoreBreakdown(rawScoreInput, item);
+    const scoreBreakdown = isRecord(rawScoreInput)
+      ? normalizedScoreBreakdown
+      : mergeParsedScoreBreakdown(parsed?.scoreBreakdown, normalizedScoreBreakdown);
 
     return {
       id: item.id,
@@ -895,7 +936,7 @@ function normalizeExplicitBuildups(payload: unknown, regime: RegimeSummary, seri
         item.divergence >= 70 ? "Short Squeeze Risk: Elevated if the binary event lands." : "Short Squeeze Risk: Moderate.",
       ]),
       complacency: normalizeComplacency(raw.complacency ?? raw.complacencyCheck ?? raw.complacency_check, item),
-      scoreBreakdown: parsedScoreTotal && !isRecord(raw.scoreBreakdown ?? raw.score_breakdown) ? { ...scoreBreakdown, total: parsedScoreTotal } : scoreBreakdown,
+      scoreBreakdown,
       action: asString(raw.action ?? raw.recommendedAction ?? raw.recommended_action, parsed?.action ?? `Review ${assetBasket.primaryLong} versus ${assetBasket.primaryShort}; use ${assetBasket.hedge} as the risk-control leg.`),
       ultraDeepAnalysis: normalizeUltraDeepAnalysis(raw.ultraDeepAnalysis ?? raw.ultra_deep_analysis ?? raw.deepAnalysis ?? raw.deep_analysis, parsedUltraDeep),
       rawTelemetry: asStringArray(raw.rawTelemetry ?? raw.raw_telemetry ?? raw.telemetry, parsed?.rawTelemetry ?? buildRawTelemetry(item, series)),

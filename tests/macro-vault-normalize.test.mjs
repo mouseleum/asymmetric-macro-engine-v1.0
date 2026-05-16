@@ -22,6 +22,13 @@ test("parses old-engine raw reports into structured buildups", () => {
   assert.deepEqual(buildup.assetBasket.proxies, ["TTF gas", "PAXG", "freight rates"]);
   assert.equal(buildup.divergenceScore, 88);
   assert.equal(buildup.conviction, 85);
+  assert.deepEqual(buildup.scoreBreakdown, {
+    visibility: 19,
+    escalation: 23,
+    mispricing: 22,
+    directness: 21,
+    total: 85,
+  });
   assert.match(buildup.binaryEvent, /verified closure/i);
   assert.ok(buildup.catalysts.some((item) => /insurance renewal/i.test(item)));
   assert.match(buildup.invalidation, /routing normalizes/i);
@@ -109,9 +116,45 @@ Divergence Score: 72/100`,
   assert.equal(buildup.situation, "Partial report has only a situation and a score.");
   assert.equal(buildup.divergenceScore, 72);
   assert.equal(buildup.conviction, 72);
+  assert.equal(buildup.scoreBreakdown.total, 72);
   assert.ok(buildup.observableFacts.length > 0);
   assert.ok(buildup.timeline.length > 0);
   assert.ok(buildup.action.length > 0);
+});
+
+test("uses parsed score components when old-engine reports include them", () => {
+  const payloads = cloneFixture();
+  payloads["dashboard-feed"] = {
+    opportunities: [
+      {
+        id: "component-score-report",
+        report: `[LABEL: Component Score]
+
+BUILDUP DETECTED
+Situation: Old report supplies a full score block.
+
+DIVERGENCE METER: 79/100
+
+SCORE:
+Visibility: 18/25
+Escalation: 24/25
+Mispricing: 21/25
+Directness: 20/25 TOTAL: 83/100`,
+      },
+    ],
+  };
+
+  const [buildup] = normalizeDashboardModel(payloads, [], "mock").buildups;
+
+  assert.equal(buildup.origin, "parsed");
+  assert.equal(buildup.conviction, 83);
+  assert.deepEqual(buildup.scoreBreakdown, {
+    visibility: 18,
+    escalation: 24,
+    mispricing: 21,
+    directness: 20,
+    total: 83,
+  });
 });
 
 test("still derives watch buildups when no explicit opportunities exist", () => {

@@ -507,11 +507,60 @@ function FactList({ items }: { items: string[] }) {
   );
 }
 
+function TradeBasket({ buildup }: { buildup: Buildup }) {
+  const basketItems = [
+    ["Primary Long", buildup.assetBasket.primaryLong, "text-good"],
+    ["Primary Short", buildup.assetBasket.primaryShort, "text-warn"],
+    ["Correlated Proxies", buildup.assetBasket.proxies.join(" & "), "text-accent"],
+    ["Hedge / Secondary", buildup.assetBasket.hedge, "text-muted"],
+  ];
+
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      {basketItems.map(([label, value, color]) => (
+        <div key={label} className="border border-line/10 bg-bg/45 p-4">
+          <p className="font-mono text-[10px] font-bold uppercase text-muted">{label}</p>
+          <p className={cn("mt-3 text-lg font-semibold leading-tight", color)}>{value || "Not supplied"}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SourceGrounding({ buildup }: { buildup: Buildup }) {
+  return (
+    <div className="mt-8 border-t border-line/10 pt-8">
+      <SectionTitle>Source Grounding</SectionTitle>
+      {buildup.sources.length > 0 ? (
+        <div className="mt-4 grid gap-3">
+          {buildup.sources.slice(0, 4).map((source) => (
+            <a
+              key={`${source.title}-${source.url}`}
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-between gap-4 border border-line/10 bg-bg/45 px-4 py-3 font-mono text-[11px] uppercase text-muted hover:border-accent hover:text-accent"
+            >
+              <span>{source.title}</span>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm leading-relaxed text-ink/70">
+          Macro Vault did not attach source links to this signal. Treat it as watch-grade until grounding improves.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function OpportunityReport({ buildup, model }: { buildup: Buildup; model: DashboardModel }) {
   const [copied, setCopied] = useState(false);
   const quality = candidateQuality(buildup);
   const rejectionReasons = candidateRejectionReasons(buildup, quality);
   const isExploratoryCandidate = buildup.origin === "derived" && !passesDerivedQualityGate(buildup);
+  const hasCoordinates = Boolean(buildup.coordinates);
   const reportKicker = isExploratoryCandidate ? "Exploratory candidate" : "Opportunity identified";
   const reportTitle = isExploratoryCandidate ? "Candidate Detected" : "Buildup Detected";
 
@@ -587,9 +636,15 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
         ) : null}
       </header>
 
-      <div className="mt-8">
-        <SignalMap buildup={buildup} />
-      </div>
+      {hasCoordinates ? (
+        <div className="mt-8">
+          <SignalMap buildup={buildup} />
+        </div>
+      ) : (
+        <div className="mt-8 border border-line/10 bg-bg/45 px-4 py-3 font-mono text-[11px] uppercase text-muted">
+          Geospatial lock unavailable // Macro Vault did not supply coordinates for this signal.
+        </div>
+      )}
 
       <nav className="mt-8 flex gap-2 overflow-x-auto border-y border-line/10 py-3 no-scrollbar" aria-label="Report sections">
         {[
@@ -660,24 +715,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
 
         <div id="basket" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <SectionTitle>Asset Correlation Basket</SectionTitle>
-          <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
-            <div>
-              <dt className="font-mono text-[10px] uppercase text-muted">Primary Long</dt>
-              <dd className="mt-1 font-semibold">{buildup.assetBasket.primaryLong}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase text-muted">Primary Short</dt>
-              <dd className="mt-1 font-semibold">{buildup.assetBasket.primaryShort}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase text-muted">Correlated Proxies</dt>
-              <dd className="mt-1 font-semibold">{buildup.assetBasket.proxies.join(" & ")}</dd>
-            </div>
-            <div>
-              <dt className="font-mono text-[10px] uppercase text-muted">Hedge / Secondary</dt>
-              <dd className="mt-1 font-semibold">{buildup.assetBasket.hedge}</dd>
-            </div>
-          </dl>
+          <TradeBasket buildup={buildup} />
         </div>
 
         <div id="divergence" className="mt-8 grid scroll-mt-6 gap-8 border-t border-line/10 pt-8 md:grid-cols-2">
@@ -742,15 +780,18 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           </div>
         </div>
 
-        <div id="catalysts" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
-          <SectionTitle>Upcoming Catalysts</SectionTitle>
-          <FactList items={buildup.catalysts.length > 0 ? buildup.catalysts : ["No upcoming catalysts supplied by Macro Vault."]} />
+        <div id="catalysts" className="mt-8 grid scroll-mt-6 gap-6 border-t border-line/10 pt-8 md:grid-cols-[1.05fr_0.95fr]">
+          <div>
+            <SectionTitle>Upcoming Catalysts</SectionTitle>
+            <FactList items={buildup.catalysts.length > 0 ? buildup.catalysts : ["No upcoming catalysts supplied by Macro Vault."]} />
+          </div>
+          <div className="border border-line/10 bg-bg/45 p-4">
+            <SectionTitle>Downside / Invalidation</SectionTitle>
+            <p className="mt-3 text-sm leading-relaxed text-ink/70">{buildup.invalidation}</p>
+          </div>
         </div>
 
-        <div className="mt-8 border-t border-line/10 pt-8">
-          <SectionTitle>Downside</SectionTitle>
-          <p className="mt-3 text-sm leading-relaxed text-ink/70">{buildup.invalidation}</p>
-        </div>
+        <SourceGrounding buildup={buildup} />
 
         <details id="deep-analysis" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <summary className="cursor-pointer text-xl font-semibold uppercase text-ink/75 hover:text-accent">

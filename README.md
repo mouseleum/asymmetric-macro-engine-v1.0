@@ -50,6 +50,10 @@ Preferred explicit opportunity payloads are documented in:
 
 If Macro Vault does not return explicit opportunities, the app can derive watch items from generic dashboard-feed rows. Derived items are held below the main alert report unless they clear a strict quality gate.
 
+Future alert discovery and deep-research provider options are documented in:
+
+`docs/research-engine-later.md`
+
 ## Verification
 
 ```bash

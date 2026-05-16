@@ -16,6 +16,7 @@ Use this before merging the Macro Finder V1 dashboard branch.
 - Alert threshold `0` returns exploratory candidates without presenting them as true alerts.
 - Normal thresholds keep watch-grade derived rows below true alert status.
 - Raw payload previews are redacted before display.
+- Recommended Vault payload copy is a handoff aid only; it does not write to Macro Vault.
 
 ## Manual Smoke
 
@@ -23,6 +24,7 @@ Use this before merging the Macro Finder V1 dashboard branch.
 - Set `Alert Threshold` to `0`, run research, and confirm `Exploratory candidate`.
 - Click `Parser Demo` and confirm `Opportunity identified`.
 - Open `Vault Signal Inspector` and then `Raw Vault Payload Preview`.
+- Click `Copy Vault Payload` and confirm success or graceful unavailable state.
 - Open `/diagnostics` and confirm endpoint-shape inspector, opportunity readiness, contract gap, and recommended `dashboard-feed` shape.
 
 ## Verification

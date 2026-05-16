@@ -32,6 +32,7 @@ import {
   type ResearchRun,
 } from "@/lib/macro-vault/research";
 import { sampleNorthernFrontBuildup } from "@/lib/macro-vault/sample-buildup";
+import { recommendedDashboardFeedPayloadText } from "@/lib/macro-vault/recommended-payload";
 import type { Buildup, DashboardModel, RiskItem } from "@/lib/macro-vault/types";
 
 function formatTime(value: string) {
@@ -199,6 +200,17 @@ function StatusBanner({ model }: { model: DashboardModel }) {
 function VaultContractStatus({ model, feedStatus }: { model: DashboardModel; feedStatus: string }) {
   const { explicitCount, parsedCount, derivedCount } = model.diagnostics.opportunities;
   const contractGap = hasVaultContractGap(model);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "unavailable">("idle");
+
+  async function copyRecommendedPayload() {
+    try {
+      await navigator.clipboard.writeText(recommendedDashboardFeedPayloadText);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1800);
+    } catch {
+      setCopyState("unavailable");
+    }
+  }
 
   return (
     <section className="border-b border-line/10 bg-paper px-5 py-4 md:px-10" aria-label="Vault contract status">
@@ -229,13 +241,36 @@ function VaultContractStatus({ model, feedStatus }: { model: DashboardModel; fee
             {feedStatus}
           </p>
         </div>
-        <a
-          href="/diagnostics"
-          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 border border-line/20 bg-bg px-4 font-mono text-[11px] font-bold uppercase text-ink hover:border-accent hover:text-accent"
-        >
-          Diagnostics
-          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-        </a>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={copyRecommendedPayload}
+            className={cn(
+              "inline-flex h-11 items-center justify-center gap-2 border px-4 font-mono text-[11px] font-bold uppercase hover:border-accent hover:text-accent",
+              copyState === "unavailable"
+                ? "border-warn/40 bg-warn/5 text-warn"
+                : "border-line/20 bg-bg text-ink",
+            )}
+          >
+            {copyState === "copied" ? (
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {copyState === "copied"
+              ? "Payload Copied"
+              : copyState === "unavailable"
+                ? "Copy Unavailable"
+                : "Copy Vault Payload"}
+          </button>
+          <a
+            href="/diagnostics"
+            className="inline-flex h-11 items-center justify-center gap-2 border border-line/20 bg-bg px-4 font-mono text-[11px] font-bold uppercase text-ink hover:border-accent hover:text-accent"
+          >
+            Diagnostics
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
+        </div>
       </div>
     </section>
   );

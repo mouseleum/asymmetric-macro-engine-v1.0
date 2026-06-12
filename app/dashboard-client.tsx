@@ -119,10 +119,10 @@ function mapExternalUrl(buildup: Buildup) {
 }
 
 function mapRegion(buildup: Buildup) {
-  const lat = buildup.coordinates?.lat;
-  const lon = buildup.coordinates?.lon;
-  if (lat && lon && lat >= 24 && lat <= 28.5 && lon >= 52 && lon <= 59) return "hormuz";
-  if (lat && lon && lat >= 31 && lat <= 35.5 && lon >= 33 && lon <= 37) return "levant";
+  if (!buildup.coordinates) return "generic";
+  const { lat, lon } = buildup.coordinates;
+  if (lat >= 24 && lat <= 28.5 && lon >= 52 && lon <= 59) return "hormuz";
+  if (lat >= 31 && lat <= 35.5 && lon >= 33 && lon <= 37) return "levant";
   return "generic";
 }
 
@@ -489,8 +489,8 @@ function SectionTitle({ children }: { children: string }) {
 function FactList({ items }: { items: string[] }) {
   return (
     <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink/70">
-      {items.map((item) => (
-        <li key={item} className="flex gap-2">
+      {items.map((item, index) => (
+        <li key={`${index}-${item}`} className="flex gap-2">
           <span className="font-mono text-accent">//</span>
           <span>{item}</span>
         </li>
@@ -1115,11 +1115,34 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
   const [exampleLoaded, setExampleLoaded] = useState(false);
   const [parserDemoLoaded, setParserDemoLoaded] = useState(false);
 
-  const displayBuildups = [
-    ...(exampleLoaded ? [sampleNorthernFrontBuildup] : []),
-    ...(parserDemoLoaded && parserDemoBuildup ? [parserDemoBuildup] : []),
-    ...sortedBuildups,
-  ];
+  const displayBuildups = useMemo(
+    () => [
+      ...(exampleLoaded ? [sampleNorthernFrontBuildup] : []),
+      ...(parserDemoLoaded && parserDemoBuildup ? [parserDemoBuildup] : []),
+      ...sortedBuildups,
+    ],
+    [exampleLoaded, parserDemoLoaded, parserDemoBuildup, sortedBuildups],
+  );
+  const idleRun = useMemo<ResearchRun>(
+    () => ({
+      phase: "idle",
+      hasRun: false,
+      query: "",
+      keywords: [],
+      threshold: 60,
+      results: [],
+      scanned: displayBuildups.length,
+      rejected: displayBuildups.length,
+      rejectedByQuality: displayBuildups.filter((buildup) => !passesDerivedQualityGate(buildup)).length,
+      rejectedByKeyword: 0,
+      rejectedByThreshold: 0,
+      rejectedCandidates: displayBuildups
+        .map(scoreBuildupWithoutKeywordFilter)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3),
+    }),
+    [displayBuildups],
+  );
   const reportableBuildups = displayBuildups.filter(passesDerivedQualityGate);
   const researchBuildups = researchRun.phase === "alert-found" ? researchRun.results.map((result) => result.buildup) : [];
   const selectableBuildups = researchBuildups.length > 0 ? researchBuildups : reportableBuildups;
@@ -1202,30 +1225,7 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
           {showScanning ? (
             <ScanningReport run={researchRun} />
           ) : showNoAlert ? (
-            <NoAlertReport
-              run={
-                researchRun.hasRun
-                  ? researchRun
-                  : {
-                      phase: "idle",
-                      hasRun: false,
-                      query: "",
-                      keywords: [],
-                      threshold: 60,
-                      results: [],
-                      scanned: displayBuildups.length,
-                      rejected: displayBuildups.length,
-                      rejectedByQuality: displayBuildups.filter((buildup) => !passesDerivedQualityGate(buildup)).length,
-                      rejectedByKeyword: 0,
-                      rejectedByThreshold: 0,
-                      rejectedCandidates: displayBuildups
-                        .map(scoreBuildupWithoutKeywordFilter)
-                        .sort((a, b) => b.score - a.score)
-                        .slice(0, 3),
-                    }
-              }
-              status={feedStatus}
-            />
+            <NoAlertReport run={researchRun.hasRun ? researchRun : idleRun} status={feedStatus} />
           ) : activeBuildup ? (
             <OpportunityReport buildup={activeBuildup} model={model} />
           ) : (

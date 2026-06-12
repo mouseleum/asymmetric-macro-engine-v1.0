@@ -155,7 +155,8 @@ function redactRawValue(key: string, value: unknown): unknown {
   if (typeof value === "string") {
     return value
       .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
-      .replace(/\b(?:sk|pk|eyJ)[A-Za-z0-9._~+/=-]{16,}\b/g, "[REDACTED]");
+      .replace(/\b(?:sk|pk|eyJ|AIza|gh[pousr]_|xox[baprs]-)[A-Za-z0-9._~+/=-]{16,}\b/g, "[REDACTED]")
+      .replace(/\b[0-9a-f]{32,}\b/gi, "[REDACTED]");
   }
   return value;
 }

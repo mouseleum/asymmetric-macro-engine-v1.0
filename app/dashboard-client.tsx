@@ -2,7 +2,6 @@
 
 import {
   AlertTriangle,
-  Archive,
   ArrowRight,
   CheckCircle2,
   Clock3,
@@ -36,6 +35,8 @@ import { recommendedDashboardFeedPayloadText } from "@/lib/macro-vault/recommend
 import type { Buildup, DashboardModel, RiskItem } from "@/lib/macro-vault/types";
 
 function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", {
     month: "numeric",
     day: "numeric",
@@ -44,16 +45,18 @@ function formatTime(value: string) {
     minute: "2-digit",
     second: "2-digit",
     timeZone: "UTC",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function formatShortTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     timeZone: "UTC",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function severityClass(severity: RiskItem["severity"]) {
@@ -116,10 +119,10 @@ function mapExternalUrl(buildup: Buildup) {
 }
 
 function mapRegion(buildup: Buildup) {
-  const lat = buildup.coordinates?.lat;
-  const lon = buildup.coordinates?.lon;
-  if (lat && lon && lat >= 24 && lat <= 28.5 && lon >= 52 && lon <= 59) return "hormuz";
-  if (lat && lon && lat >= 31 && lat <= 35.5 && lon >= 33 && lon <= 37) return "levant";
+  if (!buildup.coordinates) return "generic";
+  const { lat, lon } = buildup.coordinates;
+  if (lat >= 24 && lat <= 28.5 && lon >= 52 && lon <= 59) return "hormuz";
+  if (lat >= 31 && lat <= 35.5 && lon >= 33 && lon <= 37) return "levant";
   return "generic";
 }
 
@@ -283,9 +286,9 @@ function Masthead({ model }: { model: DashboardModel }) {
         Asymmetric Macro Finder
       </h1>
       <div className="mt-5 space-y-1 font-mono text-xs uppercase leading-relaxed text-muted">
-        <p>System Status:</p>
-        <p>Operational // Scanner:</p>
-        <p>Active</p>
+        <p>Editorial macro-risk</p>
+        <p>briefing // Data:</p>
+        <p>Macro Vault</p>
       </div>
       <div className="mt-6 inline-flex items-center gap-2 border border-line/20 bg-paper px-3 py-2 font-mono text-[10px] font-bold uppercase text-muted">
         <Database className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
@@ -363,20 +366,9 @@ function CommandBar({
         </button>
 
         <div className="flex min-w-0 flex-wrap items-center gap-3 border border-line/10 bg-paper px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2 border-r border-line/10 pr-4 font-mono text-[11px] font-bold uppercase text-accent">
-            <RadioTower className="h-3.5 w-3.5" aria-hidden="true" />
-            Telemetry Active
-          </div>
-          <div className="flex items-center gap-2 border-r border-line/10 pr-4 font-mono text-[11px] font-bold uppercase text-good">
-            <Archive className="h-3.5 w-3.5" aria-hidden="true" />
-            Archive Active
-          </div>
-          <div className="flex items-center gap-2 border-r border-line/10 pr-4 font-mono text-[11px] uppercase text-muted">
-            Quick
-            <span className="relative h-6 w-11 rounded-full bg-accent">
-              <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
-            </span>
-            <b className="text-ink">Deep</b>
+          <div className="flex items-center gap-2 border-r border-line/10 pr-4 font-mono text-[11px] font-bold uppercase text-muted">
+            <RadioTower className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+            Local pass over loaded Vault signals
           </div>
           <label htmlFor="alert-threshold" className="font-mono text-[11px] uppercase text-muted">
             Alert Threshold:
@@ -497,8 +489,8 @@ function SectionTitle({ children }: { children: string }) {
 function FactList({ items }: { items: string[] }) {
   return (
     <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink/70">
-      {items.map((item) => (
-        <li key={item} className="flex gap-2">
+      {items.map((item, index) => (
+        <li key={`${index}-${item}`} className="flex gap-2">
           <span className="font-mono text-accent">//</span>
           <span>{item}</span>
         </li>
@@ -652,7 +644,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
           ["Basket", "#basket"],
           ["Divergence", "#divergence"],
           ["Catalysts", "#catalysts"],
-          ["Deep", "#deep-analysis"],
+          ...(buildup.origin !== "derived" ? [["Deep", "#deep-analysis"]] : []),
           ["Telemetry", "#telemetry"],
         ].map(([label, href]) => (
           <a
@@ -793,6 +785,9 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
 
         <SourceGrounding buildup={buildup} />
 
+        {/* Derived items only carry template-generated deep analysis; showing it would dress
+            boilerplate up as research. Only Vault-authored origins get this section. */}
+        {buildup.origin !== "derived" ? (
         <details id="deep-analysis" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <summary className="cursor-pointer text-xl font-semibold uppercase text-ink/75 hover:text-accent">
             Ultra Deep Analysis (Pro)
@@ -820,6 +815,7 @@ function OpportunityReport({ buildup, model }: { buildup: Buildup; model: Dashbo
             </section>
           </div>
         </details>
+        ) : null}
 
         <details id="telemetry" className="mt-8 scroll-mt-6 border-t border-line/10 pt-8">
           <summary className="cursor-pointer font-mono text-[11px] font-bold uppercase tracking-normal text-muted hover:text-accent">
@@ -883,12 +879,12 @@ function ScanningReport({ run }: { run: ResearchRun }) {
         <Loader2 className="mt-1 h-7 w-7 shrink-0 animate-spin text-accent" aria-hidden="true" />
         <div>
           <h2 className="text-3xl font-extrabold uppercase leading-tight">Research Running</h2>
-          <p className="mt-2 font-mono text-xs uppercase text-muted">Deep pass // threshold gate active</p>
+          <p className="mt-2 font-mono text-xs uppercase text-muted">Local filter pass // threshold gate active</p>
         </div>
       </div>
       <div className="mt-10 border-y border-line/10 py-8">
         <p className="max-w-2xl text-xl leading-relaxed text-ink/70">
-          Scanning Vault signals for a reportable buildup. Search words narrow the pass when they match; threshold zero can fall back to broad candidates.
+          Filtering the loaded Vault signals for a reportable buildup. Search words narrow the pass when they match; threshold zero can fall back to broad candidates.
         </p>
       </div>
       <dl className="mt-8 grid gap-5 font-mono text-xs uppercase text-muted md:grid-cols-3">
@@ -905,19 +901,8 @@ function ScanningReport({ run }: { run: ResearchRun }) {
           <dd className="mt-2 text-ink">{run.scanned}</dd>
         </div>
       </dl>
-      <div className="mt-8 grid gap-3 font-mono text-[11px] uppercase text-muted">
-        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
-          <span>1. Vault candidate retrieval</span>
-          <span className="text-good">Complete</span>
-        </div>
-        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
-          <span>2. Derived-quality gate</span>
-          <span className="text-accent">Running</span>
-        </div>
-        <div className="flex items-center justify-between border border-line/10 bg-bg/45 px-4 py-3">
-          <span>3. Keyword and threshold pass</span>
-          <span>Queued</span>
-        </div>
+      <div className="mt-8 border border-line/10 bg-bg/45 px-4 py-3 font-mono text-[11px] uppercase text-muted">
+        This pass re-grades the signals already loaded from Macro Vault; it does not fetch new data.
       </div>
     </article>
   );
@@ -1130,11 +1115,34 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
   const [exampleLoaded, setExampleLoaded] = useState(false);
   const [parserDemoLoaded, setParserDemoLoaded] = useState(false);
 
-  const displayBuildups = [
-    ...(exampleLoaded ? [sampleNorthernFrontBuildup] : []),
-    ...(parserDemoLoaded && parserDemoBuildup ? [parserDemoBuildup] : []),
-    ...sortedBuildups,
-  ];
+  const displayBuildups = useMemo(
+    () => [
+      ...(exampleLoaded ? [sampleNorthernFrontBuildup] : []),
+      ...(parserDemoLoaded && parserDemoBuildup ? [parserDemoBuildup] : []),
+      ...sortedBuildups,
+    ],
+    [exampleLoaded, parserDemoLoaded, parserDemoBuildup, sortedBuildups],
+  );
+  const idleRun = useMemo<ResearchRun>(
+    () => ({
+      phase: "idle",
+      hasRun: false,
+      query: "",
+      keywords: [],
+      threshold: 60,
+      results: [],
+      scanned: displayBuildups.length,
+      rejected: displayBuildups.length,
+      rejectedByQuality: displayBuildups.filter((buildup) => !passesDerivedQualityGate(buildup)).length,
+      rejectedByKeyword: 0,
+      rejectedByThreshold: 0,
+      rejectedCandidates: displayBuildups
+        .map(scoreBuildupWithoutKeywordFilter)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3),
+    }),
+    [displayBuildups],
+  );
   const reportableBuildups = displayBuildups.filter(passesDerivedQualityGate);
   const researchBuildups = researchRun.phase === "alert-found" ? researchRun.results.map((result) => result.buildup) : [];
   const selectableBuildups = researchBuildups.length > 0 ? researchBuildups : reportableBuildups;
@@ -1217,30 +1225,7 @@ export function DashboardClient({ model, parserDemoBuildup }: { model: Dashboard
           {showScanning ? (
             <ScanningReport run={researchRun} />
           ) : showNoAlert ? (
-            <NoAlertReport
-              run={
-                researchRun.hasRun
-                  ? researchRun
-                  : {
-                      phase: "idle",
-                      hasRun: false,
-                      query: "",
-                      keywords: [],
-                      threshold: 60,
-                      results: [],
-                      scanned: displayBuildups.length,
-                      rejected: displayBuildups.length,
-                      rejectedByQuality: displayBuildups.filter((buildup) => !passesDerivedQualityGate(buildup)).length,
-                      rejectedByKeyword: 0,
-                      rejectedByThreshold: 0,
-                      rejectedCandidates: displayBuildups
-                        .map(scoreBuildupWithoutKeywordFilter)
-                        .sort((a, b) => b.score - a.score)
-                        .slice(0, 3),
-                    }
-              }
-              status={feedStatus}
-            />
+            <NoAlertReport run={researchRun.hasRun ? researchRun : idleRun} status={feedStatus} />
           ) : activeBuildup ? (
             <OpportunityReport buildup={activeBuildup} model={model} />
           ) : (

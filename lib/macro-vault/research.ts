@@ -257,11 +257,11 @@ export function runResearchPass({
   const thresholdRejected = resultCandidates.filter((result) => result.score < threshold);
   const keywordRejected = targetFallback ? 0 : buildups.length - keywordMatched.length;
   const topQualityRejected = [...qualityRejected].sort((a, b) => b.score - a.score)[0];
-  const topThresholdRejected = thresholdRejected.sort((a, b) => b.score - a.score)[0];
+  const topThresholdRejected = [...thresholdRejected].sort((a, b) => b.score - a.score)[0];
   const keywordRejectedCandidates = keywords.length > 0 && !targetFallback
     ? allScored.filter((result) => !directKeywordMatched.some((matched) => matched.buildup.id === result.buildup.id))
     : [];
-  const topRejected = topThresholdRejected ?? topQualityRejected ?? keywordRejectedCandidates.sort((a, b) => b.score - a.score)[0];
+  const topRejected = topThresholdRejected ?? topQualityRejected ?? [...keywordRejectedCandidates].sort((a, b) => b.score - a.score)[0];
   const topRejectedReason = topThresholdRejected
     ? `Score ${topThresholdRejected.score} did not clear threshold ${threshold}.`
     : topQualityRejected

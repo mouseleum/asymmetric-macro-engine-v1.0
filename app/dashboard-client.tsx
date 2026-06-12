@@ -36,6 +36,8 @@ import { recommendedDashboardFeedPayloadText } from "@/lib/macro-vault/recommend
 import type { Buildup, DashboardModel, RiskItem } from "@/lib/macro-vault/types";
 
 function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", {
     month: "numeric",
     day: "numeric",
@@ -44,16 +46,18 @@ function formatTime(value: string) {
     minute: "2-digit",
     second: "2-digit",
     timeZone: "UTC",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function formatShortTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     timeZone: "UTC",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function severityClass(severity: RiskItem["severity"]) {
